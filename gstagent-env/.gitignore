@@ -1,0 +1,50 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Environment secrets
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Security — database files (L4)
+*.db
+*.sqlite
+*.sqlite3
+
+# Security — key files
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# Security scan reports
+bandit-report.json

@@ -1,0 +1,4 @@
+# file: C:\HACKTHAON\gstagent-env\environment\graders\grader_full_recon.py
+# hypothesis_version: 6.151.10
+
+[0.0, 0.1, 0.2, 0.3, 0.4, 1.0, 'action', 'action_correctness', 'all_invoice_ids', 'claim full', 'discrepancies', 'efficiency_bonus', 'follow up', 'gstr-1', 'invoice_id', 'itc_accuracy', 'matched amount', 'recall_score', 'reverse', 'supplier', 'total', 'total_itc']

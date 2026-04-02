@@ -1,0 +1,4 @@
+# file: C:\HACKTHAON\gstagent-env\environment\rules\gst_rules.py
+# hypothesis_version: 6.151.10
+
+[0.0, 0.05, 0.2, 0.8, 'action', 'cgst', 'eligible', 'igst', 'ineligible', 'invoice_id', 'itc_amount', 'partial', 'sgst', 'status', 'supplier_gstin', 'taxable_amount']

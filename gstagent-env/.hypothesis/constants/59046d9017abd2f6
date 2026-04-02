@@ -1,0 +1,4 @@
+# file: C:\HACKTHAON\gstagent-env\environment\server.py
+# hypothesis_version: 6.151.10
+
+[400, 404, 413, 500, 504, 1000, '*', ',', '/health', '/leaderboard', '/replay/{session_id}', '/reset', '/state/{session_id}', '/step', '1.0.0', '1; mode=block', 'Cache-Control', 'Content-Type', 'DENY', 'GET', 'POST', 'Permissions-Policy', 'Referrer-Policy', 'X-API-Key', 'X-Frame-Options', 'X-Request-ID', 'X-XSS-Protection', '[REDACTED]', 'api_key', 'authorization', 'content-length', 'cookie', 'created_at', 'done', 'entries', 'env', 'episode_reset', 'error', 'http', 'info', 'iso', 'leaderboard.json', 'max_bytes', 'no-store', 'nosniff', 'observation', 'off', 'ok', 'openai_key', 'password', 'request', 'request_id', 'reward', 'score', 'server_started', 'server_stopped', 'session_expired', 'session_id', 'sessions_active', 'status', 'step', 'steps', 'task_id', 'timestamp', 'token', 'total_steps', 'unhandled_exception', 'unknown', 'w']

@@ -1,0 +1,228 @@
+{
+  "purchase_register": [
+    {
+      "invoice_id": "INV-0001",
+      "supplier_gstin": "29AHFTR8040G4ZS",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-13",
+      "taxable_amount": 44006.1,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 7921.1,
+      "hsn_code": "3926",
+      "item_description": "Plastic articles"
+    },
+    {
+      "invoice_id": "INV-0002",
+      "supplier_gstin": "24HFTCJ3320O9ZH",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-07",
+      "taxable_amount": 353763.06,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 42451.57,
+      "hsn_code": "8517",
+      "item_description": "Telephone sets and smartphones"
+    },
+    {
+      "invoice_id": "INV-0003",
+      "supplier_gstin": "32POSSK4287F7ZX",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-03",
+      "taxable_amount": 428382.27,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 119947.04,
+      "hsn_code": "9401",
+      "item_description": "Seats and chairs"
+    },
+    {
+      "invoice_id": "INV-0004",
+      "supplier_gstin": "32POSSK4287F7ZX",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-15",
+      "taxable_amount": 319663.8,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 38359.66,
+      "hsn_code": "4820",
+      "item_description": "Registers, notebooks, stationery"
+    },
+    {
+      "invoice_id": "INV-0005",
+      "supplier_gstin": "32POSSK4287F7ZX",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-12",
+      "taxable_amount": 108705.98,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 5435.3,
+      "hsn_code": "7210",
+      "item_description": "Flat-rolled iron or steel products"
+    },
+    {
+      "invoice_id": "INV-0006",
+      "supplier_gstin": "24HFTCJ3320O9ZH",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-21",
+      "taxable_amount": 89713.63,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 10765.64,
+      "hsn_code": "1701",
+      "item_description": "Cane or beet sugar"
+    },
+    {
+      "invoice_id": "INV-0007",
+      "supplier_gstin": "29AHFTR8040G4ZS",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-15",
+      "taxable_amount": 192830.44,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 23139.65,
+      "hsn_code": "0402",
+      "item_description": "Milk and cream, concentrated"
+    },
+    {
+      "invoice_id": "INV-0008",
+      "supplier_gstin": "24HFTCJ3320O9ZH",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-11",
+      "taxable_amount": 422211.7,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 21110.59,
+      "hsn_code": "2710",
+      "item_description": "Petroleum oils"
+    },
+    {
+      "invoice_id": "INV-0009",
+      "supplier_gstin": "29AHFTR8040G4ZS",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-27",
+      "taxable_amount": 20889.62,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 5849.09,
+      "hsn_code": "4819",
+      "item_description": "Cartons, boxes, corrugated paper"
+    },
+    {
+      "invoice_id": "INV-0010",
+      "supplier_gstin": "32POSSK4287F7ZX",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-03",
+      "taxable_amount": 109436.51,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 19698.57,
+      "hsn_code": "9986",
+      "item_description": "Maintenance and repair services"
+    }
+  ],
+  "gstr2b": [
+    {
+      "invoice_id": "INV-0001",
+      "supplier_gstin": "29AHFTR8040G4ZS",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-13",
+      "taxable_amount": 44006.1,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 7921.1,
+      "hsn_code": "3926",
+      "item_description": "Plastic articles"
+    },
+    {
+      "invoice_id": "INV-0002",
+      "supplier_gstin": "24HFTCJ3320O9ZH",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-07",
+      "taxable_amount": 353763.06,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 42451.57,
+      "hsn_code": "8517",
+      "item_description": "Telephone sets and smartphones"
+    },
+    {
+      "invoice_id": "INV-0005",
+      "supplier_gstin": "32POSSK4287F7ZX",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-12",
+      "taxable_amount": 108705.98,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 5435.3,
+      "hsn_code": "7210",
+      "item_description": "Flat-rolled iron or steel products"
+    },
+    {
+      "invoice_id": "INV-0006",
+      "supplier_gstin": "24HFTCJ3320O9ZH",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-21",
+      "taxable_amount": 89713.63,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 10765.64,
+      "hsn_code": "1701",
+      "item_description": "Cane or beet sugar"
+    },
+    {
+      "invoice_id": "INV-0007",
+      "supplier_gstin": "29AHFTR8040G4ZS",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-15",
+      "taxable_amount": 192830.44,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 23139.65,
+      "hsn_code": "0402",
+      "item_description": "Milk and cream, concentrated"
+    },
+    {
+      "invoice_id": "INV-0008",
+      "supplier_gstin": "24HFTCJ3320O9ZH",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-11",
+      "taxable_amount": 422211.7,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 21110.59,
+      "hsn_code": "2710",
+      "item_description": "Petroleum oils"
+    },
+    {
+      "invoice_id": "INV-0009",
+      "supplier_gstin": "29AHFTR8040G4ZS",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-27",
+      "taxable_amount": 20889.62,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 5849.09,
+      "hsn_code": "4819",
+      "item_description": "Cartons, boxes, corrugated paper"
+    },
+    {
+      "invoice_id": "INV-0010",
+      "supplier_gstin": "32POSSK4287F7ZX",
+      "buyer_gstin": "27QAHFT6804A2ZX",
+      "invoice_date": "2025-03-03",
+      "taxable_amount": 109436.51,
+      "cgst": 0.0,
+      "sgst": 0.0,
+      "igst": 19698.57,
+      "hsn_code": "9986",
+      "item_description": "Maintenance and repair services"
+    }
+  ],
+  "metadata": {
+    "total_invoices": 10,
+    "gstr2b_count": 8,
+    "missing_count": 2,
+    "seed": 42
+  }
+}

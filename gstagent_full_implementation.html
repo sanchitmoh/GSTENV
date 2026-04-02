@@ -1,0 +1,138 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+.plan{padding:8px 0 24px}
+.day-block{margin-bottom:20px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden}
+.day-header{padding:12px 18px;display:flex;align-items:center;gap:12px}
+.day-badge{font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px;white-space:nowrap}
+.day-title{font-size:14px;font-weight:500;color:var(--color-text-primary)}
+.day-sub{font-size:12px;color:var(--color-text-secondary);margin-top:1px}
+.steps{padding:0 18px 14px;display:flex;flex-direction:column;gap:6px}
+.step{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:8px;background:var(--color-background-secondary)}
+.step-num{font-size:11px;font-weight:500;color:var(--color-text-tertiary);min-width:20px;padding-top:1px}
+.step-body{flex:1}
+.step-title{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:2px}
+.step-detail{font-size:12px;color:var(--color-text-secondary);line-height:1.5}
+.code{font-family:var(--font-mono);font-size:11px;background:var(--color-background-tertiary);padding:2px 6px;border-radius:4px;color:var(--color-text-primary)}
+.file{font-family:var(--font-mono);font-size:11px;color:var(--color-text-info)}
+.tag{font-size:10px;font-weight:500;padding:2px 7px;border-radius:10px;margin-left:6px;vertical-align:middle}
+.tag-gate{background:var(--color-background-danger);color:var(--color-text-danger)}
+.tag-tip{background:var(--color-background-success);color:var(--color-text-success)}
+.tag-key{background:var(--color-background-warning);color:var(--color-text-warning)}
+.divider{height:0.5px;background:var(--color-border-tertiary);margin:0 18px 10px}
+.section-label{font-size:11px;font-weight:500;color:var(--color-text-tertiary);padding:8px 18px 4px;text-transform:uppercase;letter-spacing:0.04em}
+</style>
+
+<div class="plan">
+
+<div class="day-block">
+  <div class="day-header" style="background:var(--color-background-secondary)">
+    <span class="day-badge" style="background:#E1F5EE;color:#085041">Day 1</span>
+    <div><div class="day-title">Setup — install tools, create project skeleton</div><div class="day-sub">Goal: working folder, Python env, OpenEnv installed, scaffold generated</div></div>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body"><div class="step-title">Install prerequisites</div><div class="step-detail">Run: <span class="code">pip install openenv pydantic fastapi uvicorn openai faker</span> — these are every library you will use. Also install Docker Desktop on your machine if not already there.</div></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><div class="step-title">Create the project folder</div><div class="step-detail">Make a folder called <span class="file">gstagent-env/</span>. Inside it, create subfolders: <span class="file">environment/</span>, <span class="file">environment/tasks/</span>, <span class="file">environment/graders/</span>, <span class="file">environment/rules/</span>, <span class="file">environment/data/</span>. Also create empty <span class="file">__init__.py</span> inside each subfolder — Python needs these to treat them as packages.</div></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><div class="step-title">Create openenv.yaml <span class="tag tag-gate">Required for validation</span></div><div class="step-detail">This file tells the contest system what your environment is. Paste this exactly:<br><span class="code">name: gstagent-env<br>version: "1.0.0"<br>description: "GST reconciliation env for Indian MSMEs"<br>tasks: [invoice_match, itc_audit, full_recon]<br>author: your-name</span></div></div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-body"><div class="step-title">Create a GitHub repo + connect HuggingFace</div><div class="step-detail">Go to github.com → new repo named <span class="code">gstagent-env</span>. Also create a HuggingFace Space (huggingface.co/new-space) — choose Docker as the SDK. You will push code here on Day 8. Keep both tabs open.</div></div></div>
+  </div>
+</div>
+
+<div class="day-block">
+  <div class="day-header" style="background:var(--color-background-secondary)">
+    <span class="day-badge" style="background:#E1F5EE;color:#085041">Day 2</span>
+    <div><div class="day-title">Data generator — create all synthetic GST data</div><div class="day-sub">Goal: realistic fake invoices + GSTR-2B data saved as JSON files</div></div>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body"><div class="step-title">Write <span class="file">environment/data/generator.py</span> <span class="tag tag-key">Core file</span></div><div class="step-detail">This file generates all your fake data. It needs three functions:<br><br><span class="code">generate_gstin(state_code)</span> — returns a fake but validly formatted GSTIN like <span class="code">27AABCU9603R1ZX</span>. Format: 2-digit state + 10 chars + 1 digit + Z + 1 check char.<br><br><span class="code">generate_invoice()</span> — returns a dict with keys: <span class="code">invoice_id, supplier_gstin, buyer_gstin, invoice_date, taxable_amount, cgst, sgst, igst, hsn_code, item_description</span>. Use random amounts between 5000 and 500000.<br><br><span class="code">generate_gstr2b(invoice_list, missing_rate=0.3)</span> — takes your invoice list and randomly removes 30% of them (simulating suppliers who didn't file). Also randomly alters amounts in 10% of remaining entries. Returns the modified list as the "government view".</div></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><div class="step-title">Generate and save the sample datasets</div><div class="step-detail">At the bottom of generator.py, add a main block that runs and saves three files:<br><span class="file">environment/data/invoices_easy.json</span> — 10 invoices, 2 missing from GSTR-2B<br><span class="file">environment/data/invoices_medium.json</span> — 20 invoices, amount mismatches + missing<br><span class="file">environment/data/invoices_hard.json</span> — 50 invoices, all mismatch types mixed<br><br>Run: <span class="code">python environment/data/generator.py</span> to create these files. Check they look like real JSON before moving on.</div></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><div class="step-title">Write <span class="file">environment/rules/gst_rules.py</span></div><div class="step-detail">This file encodes the actual GST law as Python logic. You need two functions:<br><br><span class="code">check_itc_eligibility(invoice, gstr2b_record)</span> — if invoice is missing from GSTR-2B, return <span class="code">"ineligible"</span>. If amount differs by more than 20%, return <span class="code">"partial"</span>. Else return <span class="code">"eligible"</span>. This IS Rule 36(4) simplified.<br><br><span class="code">get_recommended_action(status)</span> — maps each status to an action string: ineligible → <span class="code">"Follow up with supplier to file GSTR-1"</span>, partial → <span class="code">"Claim only matched amount, reverse the rest"</span>, eligible → <span class="code">"Claim full ITC"</span>.</div></div></div>
+  </div>
+</div>
+
+<div class="day-block">
+  <div class="day-header" style="background:var(--color-background-secondary)">
+    <span class="day-badge" style="background:#EEEDFE;color:#3C3489">Day 3</span>
+    <div><div class="day-title">Pydantic models + core environment class</div><div class="day-sub">Goal: the typed data structures and the main env.py with step/reset/state working</div></div>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body"><div class="step-title">Write <span class="file">environment/models.py</span> <span class="tag tag-gate">Spec requirement</span></div><div class="step-detail">Define these Pydantic classes — every field must be typed, no plain dicts:<br><br><span class="code">class Invoice(BaseModel):<br>&nbsp;&nbsp;invoice_id: str<br>&nbsp;&nbsp;supplier_gstin: str<br>&nbsp;&nbsp;taxable_amount: float<br>&nbsp;&nbsp;cgst: float; sgst: float; igst: float<br>&nbsp;&nbsp;invoice_date: str; hsn_code: str</span><br><br><span class="code">class GSTObservation(BaseModel):<br>&nbsp;&nbsp;task_id: str<br>&nbsp;&nbsp;purchase_register: list[Invoice]<br>&nbsp;&nbsp;gstr2b_data: list[Invoice]<br>&nbsp;&nbsp;current_matches: list[dict]<br>&nbsp;&nbsp;unresolved_count: int<br>&nbsp;&nbsp;step_number: int<br>&nbsp;&nbsp;last_action_error: str | None</span><br><br><span class="code">class GSTAction(BaseModel):<br>&nbsp;&nbsp;action_type: str  # "match_invoice", "flag_mismatch", "compute_itc", "submit_report"<br>&nbsp;&nbsp;invoice_id: str | None = None<br>&nbsp;&nbsp;reason: str | None = None<br>&nbsp;&nbsp;payload: dict | None = None</span><br><br><span class="code">class GSTReward(BaseModel):<br>&nbsp;&nbsp;total: float<br>&nbsp;&nbsp;itc_accuracy: float<br>&nbsp;&nbsp;recall_score: float<br>&nbsp;&nbsp;action_correctness: float</span></div></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><div class="step-title">Write <span class="file">environment/env.py</span> — the main class</div><div class="step-detail">Create class <span class="code">GSTAgentEnv</span>. It needs these methods:<br><br><span class="code">reset(task_id)</span> — loads the correct JSON file based on task_id ("invoice_match" loads invoices_easy.json), resets all internal state, returns a fresh GSTObservation.<br><br><span class="code">step(action: GSTAction)</span> — processes one agent action. If action_type is "match_invoice", record the match in internal state. If "flag_mismatch", record the flag. If "compute_itc", run the rules engine. If "submit_report", call the grader and end the episode. Returns tuple: (observation, reward_float, done_bool, info_dict).<br><br><span class="code">state()</span> — returns the current GSTObservation without advancing anything. Just a snapshot.</div></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><div class="step-title">Quick test — run the env manually <span class="tag tag-tip">Do this now</span></div><div class="step-detail">Open a Python shell and run:<br><span class="code">from environment.env import GSTAgentEnv<br>env = GSTAgentEnv()<br>obs = env.reset("invoice_match")<br>print(obs.task_id, obs.unresolved_count)</span><br><br>If it prints without errors, Day 3 is done. If it errors, fix before moving on.</div></div></div>
+  </div>
+</div>
+
+<div class="day-block">
+  <div class="day-header" style="background:var(--color-background-secondary)">
+    <span class="day-badge" style="background:#EEEDFE;color:#3C3489">Day 4</span>
+    <div><div class="day-title">Task 1 + Task 2 + their graders</div><div class="day-sub">Goal: two fully working tasks with deterministic 0.0–1.0 scoring</div></div>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body"><div class="step-title">Write <span class="file">environment/tasks/task1_invoice_match.py</span></div><div class="step-detail">This defines Task 1 (Easy). Create function <span class="code">get_task1_config()</span> that returns:<br><span class="code">{ "task_id": "invoice_match", "description": "Identify which invoices from your purchase register appear in GSTR-2B and which are missing.", "max_steps": 8, "data_file": "invoices_easy.json" }</span><br>That's it. The task is just a configuration object.</div></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><div class="step-title">Write <span class="file">environment/graders/grader_invoice_match.py</span></div><div class="step-detail">Function <span class="code">grade(agent_matches: dict, ground_truth: dict) -> float</span>:<br><br>Both dicts are <span class="code">{invoice_id: "present" or "missing"}</span>. Calculate F1 score — this is just: correct_calls / total_invoices. Return a float between 0.0 and 1.0. This must be DETERMINISTIC — same inputs always give same output. No randomness here.</div></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><div class="step-title">Write Task 2 + its grader the same way</div><div class="step-detail"><span class="file">task2_itc_audit.py</span> — max_steps: 12, uses invoices_medium.json, description says "Determine ITC eligibility for each invoice: eligible / partial / ineligible".<br><br><span class="file">grader_itc_audit.py</span> — grade function compares agent's eligibility decisions against what <span class="code">gst_rules.check_itc_eligibility()</span> returns for each invoice. Score = (correct decisions) / (total invoices). Float 0.0–1.0.</div></div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-body"><div class="step-title">Test both graders directly <span class="tag tag-tip">Critical check</span></div><div class="step-detail">Call each grader with a perfect answer and verify it returns 1.0. Call with a wrong answer and verify it returns something less. Call the same inputs twice and verify same output both times. If any of these fail, your grader is broken — fix immediately.</div></div></div>
+  </div>
+</div>
+
+<div class="day-block">
+  <div class="day-header" style="background:var(--color-background-secondary)">
+    <span class="day-badge" style="background:#E6F1FB;color:#0C447C">Day 5</span>
+    <div><div class="day-title">Task 3 (Hard) + shaped reward function</div><div class="day-sub">Goal: the hardest task working + the multi-signal reward that impresses judges</div></div>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body"><div class="step-title">Write <span class="file">environment/tasks/task3_full_recon.py</span></div><div class="step-detail">Task 3 description: "Given the full month purchase register and GSTR-2B, produce a complete reconciliation report with total eligible ITC, discrepancy list with supplier GSTINs, and recommended actions for each discrepancy." Uses invoices_hard.json. max_steps: 20. This task requires the agent to call multiple actions before submitting.</div></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><div class="step-title">Write <span class="file">environment/graders/grader_full_recon.py</span> <span class="tag tag-key">Most important grader</span></div><div class="step-detail">This grader has FOUR components that combine into one score:<br><br><span class="code">itc_accuracy</span>: is the agent's final ITC number within 5% of the correct number? Full mark if yes, proportional penalty if off.<br><br><span class="code">discrepancy_recall</span>: what % of actual mismatches did the agent find? (mismatches_found / total_mismatches)<br><br><span class="code">action_correctness</span>: for each discrepancy the agent found, did they suggest the right action? Check against <span class="code">get_recommended_action()</span>.<br><br><span class="code">hallucination_penalty</span>: did the agent invent invoice IDs that don't exist? Each invented ID subtracts 0.1.<br><br>Final score: <span class="code">0.4*itc + 0.3*recall + 0.2*actions - hallucination_penalty</span>. Clamp to 0.0–1.0.</div></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><div class="step-title">Wire reward into <span class="file">env.py</span></div><div class="step-detail">In the <span class="code">step()</span> method, when action_type is "submit_report":<br>— call the correct grader based on current task_id<br>— build a GSTReward object with all component scores<br>— set done = True<br>— return (final_observation, reward.total, True, {"reward_breakdown": reward.dict()})<br><br>For all other action types, return a small intermediate reward (0.05) for each correct match made. This gives the agent partial progress signal throughout the episode, not just at the end.</div></div></div>
+  </div>
+</div>
+
+<div class="day-block">
+  <div class="day-header" style="background:var(--color-background-secondary)">
+    <span class="day-badge" style="background:#E6F1FB;color:#0C447C">Day 6</span>
+    <div><div class="day-title">FastAPI wrapper + local testing</div><div class="day-sub">Goal: the environment accessible via HTTP endpoints — how HuggingFace Spaces will talk to it</div></div>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body"><div class="step-title">Write <span class="file">environment/server.py</span></div><div class="step-detail">Create a FastAPI app with these four routes:<br><br><span class="code">POST /reset</span> — body: <span class="code">{"task_id": "invoice_match"}</span> — calls env.reset(), returns observation as JSON<br><br><span class="code">POST /step</span> — body: GSTAction as JSON — calls env.step(action), returns (observation, reward, done, info)<br><br><span class="code">GET /state</span> — calls env.state(), returns current observation<br><br><span class="code">GET /health</span> — returns <span class="code">{"status": "ok"}</span> — this is what HuggingFace pings to verify your space is alive</div></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><div class="step-title">Run it locally and test every endpoint <span class="tag tag-gate">Must work before Day 7</span></div><div class="step-detail">Run: <span class="code">uvicorn environment.server:app --port 8000</span><br><br>Then open another terminal and test:<br><span class="code">curl -X POST http://localhost:8000/reset -H "Content-Type: application/json" -d '{"task_id":"invoice_match"}'</span><br><br>You should get a JSON observation back. Test /step and /state too. If any return errors, fix them now — Day 7 depends on this working.</div></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><div class="step-title">Run <span class="code">openenv validate</span> <span class="tag tag-gate">Pass/fail gate</span></div><div class="step-detail">This is the contest's automated checker. Run: <span class="code">openenv validate .</span> from your project root. It checks your openenv.yaml, your models, and your endpoints. If anything fails, the error message will tell you exactly what to fix. Do not move to Day 7 until this passes cleanly.</div></div></div>
+  </div>
+</div>
+
+<div class="day-block">
+  <div class="day-header" style="background:var(--color-background-secondary)">
+    <span class="day-badge" style="background:#FAEEDA;color:#633806">Day 7</span>
+    <div><div class="day-title">Dockerfile + inference.py + README</div><div class="day-sub">Goal: everything containerised, baseline script written, docs complete</div></div>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body"><div class="step-title">Write <span class="file">Dockerfile</span> <span class="tag tag-gate">Must build cleanly</span></div><div class="step-detail">Paste this exactly:<br><span class="code">FROM python:3.11-slim<br>WORKDIR /app<br>COPY requirements.txt .<br>RUN pip install -r requirements.txt<br>COPY . .<br>EXPOSE 7860<br>CMD ["uvicorn", "environment.server:app", "--host", "0.0.0.0", "--port", "7860"]</span><br><br>Also create <span class="file">requirements.txt</span> listing: openenv, pydantic, fastapi, uvicorn, openai, faker. Then test: <span class="code">docker build -t gstagent . && docker run -p 7860:7860 gstagent</span>. Must start without errors.</div></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><div class="step-title">Write <span class="file">inference.py</span> — the baseline script <span class="tag tag-gate">Mandatory filename</span></div><div class="step-detail">This file must be in the root directory (not inside a subfolder). It uses OpenAI client to run a model against all 3 tasks and print scores. Structure:<br><br>1. Read API_BASE_URL, HF_TOKEN, MODEL_NAME from environment variables<br>2. Create OpenAI client with those credentials<br>3. For each task_id in ["invoice_match", "itc_audit", "full_recon"]:<br>&nbsp;&nbsp;— POST to /reset with task_id<br>&nbsp;&nbsp;— Loop max 12 steps: build prompt from observation, call LLM, parse action from response, POST to /step<br>&nbsp;&nbsp;— When done=True, record the reward<br>4. Print all three scores at the end<br><br>The whole script must complete in under 20 minutes on a normal laptop.</div></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><div class="step-title">Write <span class="file">README.md</span></div><div class="step-detail">The README must contain these sections (judges check this):<br><br>— What this environment is and why it matters (the GST MSME pain point in 3 sentences)<br>— Observation space: list every field of GSTObservation with types<br>— Action space: list every action_type with what payload it expects<br>— Task descriptions: one paragraph each for all 3 tasks with expected difficulty<br>— Setup instructions: exact commands to install and run locally<br>— Baseline scores: the numbers you got when you ran inference.py</div></div></div>
+  </div>
+</div>
+
+<div class="day-block">
+  <div class="day-header" style="background:var(--color-background-secondary)">
+    <span class="day-badge" style="background:#FAECE7;color:#712B13">Day 8</span>
+    <div><div class="day-title">Deploy to HuggingFace + final checks + submit</div><div class="day-sub">Deadline: 11:59 PM IST — do not start this day late</div></div>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body"><div class="step-title">Run pre-submission checklist <span class="tag tag-gate">All must pass</span></div><div class="step-detail">Before touching HuggingFace, verify locally:<br>— <span class="code">openenv validate .</span> passes<br>— <span class="code">docker build -t gstagent .</span> completes without errors<br>— <span class="code">docker run -p 7860:7860 gstagent</span> starts and /health returns 200<br>— <span class="code">python inference.py</span> runs to completion and prints 3 scores<br>— All 3 scores are between 0.0 and 1.0 (not identical, not 0.0 for all)<br><br>If anything fails here, do NOT submit yet.</div></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><div class="step-title">Push to HuggingFace Spaces</div><div class="step-detail">Add your HF Space as a git remote:<br><span class="code">git remote add hf https://huggingface.co/spaces/YOUR_USERNAME/gstagent-env</span><br><br>Then push:<br><span class="code">git add . && git commit -m "final submission" && git push hf main</span><br><br>HuggingFace will auto-build your Docker image. Wait for the build to finish (takes 3–8 minutes). Watch the build log in the HF Space UI for errors.</div></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><div class="step-title">Verify the live Space works <span class="tag tag-gate">Automated ping check</span></div><div class="step-detail">Once build is complete, test the live URL:<br><span class="code">curl https://YOUR_USERNAME-gstagent-env.hf.space/health</span><br>→ must return <span class="code">{"status":"ok"}</span><br><br><span class="code">curl -X POST https://YOUR_USERNAME-gstagent-env.hf.space/reset -H "Content-Type: application/json" -d '{"task_id":"invoice_match"}'</span><br>→ must return a JSON observation<br><br>If both work, your space is live and passing the automated gate.</div></div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-body"><div class="step-title">Submit your HF Space URL before 11:59 PM IST <span class="tag tag-gate">Hard deadline</span></div><div class="step-detail">Paste the URL of your HuggingFace Space into the contest submission form. The URL format is: <span class="code">https://huggingface.co/spaces/YOUR_USERNAME/gstagent-env</span>.<br><br>Do this by 10 PM at the latest — give yourself buffer. The contest system will automatically ping your space, run openenv validate, run your inference.py, and check all 3 graders.</div></div></div>
+  </div>
+</div>
+
+<div style="margin:0 0 8px;padding:14px 18px;border-radius:var(--border-radius-lg);border:0.5px solid var(--color-border-danger);background:var(--color-background-danger)">
+  <div style="font-size:13px;font-weight:500;color:var(--color-text-danger);margin-bottom:6px">Things that will disqualify you — avoid these at all costs</div>
+  <div style="font-size:12px;color:var(--color-text-danger);line-height:1.7">
+    Graders that always return 0.5 or 1.0 no matter what the agent does — test with wrong answers explicitly.<br>
+    The file inference.py is missing or is not in the root folder — judges check this path literally.<br>
+    HF Space returns 503 or times out — test the live URL yourself before submitting.<br>
+    openenv validate fails — run this on Day 6 and again on Day 8 before pushing.
+  </div>
+</div>
+
+</div>

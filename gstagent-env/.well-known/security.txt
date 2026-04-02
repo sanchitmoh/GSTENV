@@ -1,0 +1,7 @@
+# Security Contact
+# See https://securitytxt.org/
+Contact: mailto:security@gstagent-env.dev
+Expires: 2027-04-03T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://gstagent-env.dev/.well-known/security.txt
+Policy: https://gstagent-env.dev/security-policy

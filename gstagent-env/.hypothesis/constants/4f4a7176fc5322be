@@ -1,0 +1,4 @@
+# file: C:\HACKTHAON\gstagent-env\environment\data\generator.py
+# hypothesis_version: 6.151.10
+
+[0.0, 0.025, 0.05, 0.06, 0.09, 0.1, 0.12, 0.14, 0.15, 0.18, 0.2, 0.28, 0.3, 0.7, 1.3, 2025, 5000, 500000, '06', '07', '09', '19', '24', '27', '29', '32', '33', '36', '__main__', 'buyer_gstin', 'cgst', 'code', 'description', 'en_IN', 'gstr2b', 'gstr2b_count', 'hsn_code', 'hsn_codes.json', 'igst', 'invoice_date', 'invoice_id', 'invoices_easy.json', 'invoices_hard.json', 'invoices_medium.json', 'item_description', 'metadata', 'missing_count', 'purchase_register', 'seed', 'sgst', 'supplier_gstin', 'taxable_amount', 'total_invoices', 'w']

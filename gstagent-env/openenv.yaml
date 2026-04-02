@@ -1,0 +1,5 @@
+name: gstagent-env
+version: "1.0.0"
+description: "GST reconciliation environment for Indian MSMEs — invoice matching, ITC audit, and full reconciliation with multi-signal reward"
+tasks: [invoice_match, itc_audit, full_recon]
+author: sanchitmoh

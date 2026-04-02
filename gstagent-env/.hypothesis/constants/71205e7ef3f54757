@@ -1,0 +1,4 @@
+# file: C:\HACKTHAON\gstagent-env\environment\leaderboard_db.py
+# hypothesis_version: 6.151.10
+
+['DELETE FROM entries', 'action_correctness', 'avg', 'avg_score', 'best', 'best_score', 'by_task', 'count', 'efficiency_bonus', 'full_recon', 'invoice_match', 'itc_accuracy', 'itc_audit', 'leaderboard.db', 'leaderboard_entry', 'recall_score', 'total_entries']

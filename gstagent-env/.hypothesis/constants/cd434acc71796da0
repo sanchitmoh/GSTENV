@@ -1,0 +1,4 @@
+# file: C:\HACKTHAON\gstagent-env\environment\knowledge\gst_knowledge.py
+# hypothesis_version: 6.151.10
+
+['CBIC-Circular-170', 'CBIC-Circular-183', 'CGST Act, Section 34', 'CGST Rules, Rule 37', 'Credit-Note-Handling', 'GSTIN-Format', 'HSN-Classification', 'Mismatch-Tolerance', 'Rule-36-4', 'Rule-37', 'Section-16-2', 'business_impact', 'category', 'classification', 'content', 'id', 'itc_rules', 'legislation', 'practical', 'process', 'rules', 'source', 'technical', 'title']

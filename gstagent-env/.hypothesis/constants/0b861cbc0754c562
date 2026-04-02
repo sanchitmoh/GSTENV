@@ -1,0 +1,4 @@
+# file: C:\HACKTHAON\gstagent-env\environment\tasks\task1_invoice_match.py
+# hypothesis_version: 6.151.10
+
+['data_file', 'description', 'difficulty', 'easy', 'invoice_match', 'invoices_easy.json', 'max_steps', 'task_id']

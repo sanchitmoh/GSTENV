@@ -1,0 +1,4 @@
+# file: C:\HACKTHAON\gstagent-env\environment\curriculum.py
+# hypothesis_version: 6.151.10
+
+[0.0, 0.7, 0.75, 0.8, 'advanced', 'advancement_log', 'avg_score', 'current_level', 'current_task', 'curriculum_advance', 'easy', 'episodes_at_level', 'from', 'full_recon', 'hard', 'invoice_match', 'itc_audit', 'mastered', 'medium', 'reason', 'score', 'score_history', 'threshold', 'to', 'trigger_score']

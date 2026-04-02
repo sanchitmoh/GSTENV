@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "skills": {
+    "ai-engineer": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "854935520f6d01c8cbe9ce3914c50f1b900252e87fde16e9e750e8e7b957ba6e"
+    },
+    "ai-rag-pipeline": {
+      "source": "inferen-sh/skills",
+      "sourceType": "github",
+      "computedHash": "0ad883760ae4b617f46c6e6278bced27641c9751d002a54a9a0e485c33fac5e4"
+    },
+    "architecture-blueprint-generator": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "computedHash": "9b20f13d1d96ba1c2550e1ce535f932e943c42939d3fae906a9e0d6c1bfb471a"
+    },
+    "context-map": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "computedHash": "cca0523289057f0f6fbff2c3ead5063359dd2482a451bf8694eac0f282185786"
+    },
+    "enhance-prompt": {
+      "source": "google-labs-code/stitch-skills",
+      "sourceType": "github",
+      "computedHash": "28c47bcbc0e8d81f48fbbbe41d227efe4018a32c5d4674b0d052a70d215072d3"
+    },
+    "langchain-rag": {
+      "source": "langchain-ai/langchain-skills",
+      "sourceType": "github",
+      "computedHash": "25f569409285938fcb078ed2d14893f7d620131a28107f7a5c16f48b40bee24a"
+    },
+    "machine-learning-engineer": {
+      "source": "404kidwiz/claude-supercode-skills",
+      "sourceType": "github",
+      "computedHash": "9ee82bcdf7af1efce0672befbf37187806dcd31f11a54284489b79b15b1265fb"
+    }
+  }
+}

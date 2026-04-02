@@ -1,0 +1,4 @@
+# file: C:\HACKTHAON\gstagent-env\environment\tasks\task2_itc_audit.py
+# hypothesis_version: 6.151.10
+
+['data_file', 'description', 'difficulty', 'invoices_medium.json', 'itc_audit', 'max_steps', 'medium', 'task_id']

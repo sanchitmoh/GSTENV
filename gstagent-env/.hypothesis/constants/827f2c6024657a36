@@ -1,0 +1,4 @@
+# file: C:\HACKTHAON\gstagent-env\environment\agents\auditor.py
+# hypothesis_version: 6.151.10
+
+[0.0, 'Auditor', 'action_type', 'compute_itc', 'eligible', 'flag_mismatch', 'gstr2b_data', 'invoice_id', 'match_invoice', 'partial', 'purchase_register', 'reason']

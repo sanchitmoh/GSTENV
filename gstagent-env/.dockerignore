@@ -1,0 +1,47 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Git
+.git/
+.gitignore
+
+# Tests (not needed in prod image)
+tests/
+pytest.ini
+.pytest_cache/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment secrets
+.env
+.env.local
+
+# Dev config
+.pre-commit-config.yaml
+requirements-dev.txt
+.mypy_cache/
+.ruff_cache/
+
+# CI/CD
+.github/
+
+# Documentation (not needed in container)
+*.md
+!README.md
+
+# OS files
+.DS_Store
+Thumbs.db

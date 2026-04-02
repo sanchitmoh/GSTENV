@@ -1,0 +1,4 @@
+# file: C:\HACKTHAON\gstagent-env\environment\agents\matcher.py
+# hypothesis_version: 6.151.10
+
+[0.05, 1.0, 'Matcher', 'action_type', 'flag_mismatch', 'gpt-3.5-turbo', 'gstr2b_data', 'invoice_id', 'match_invoice', 'mismatch', 'missing', 'present', 'purchase_register', 'reason', 'status', 'taxable_amount', 'variance']
