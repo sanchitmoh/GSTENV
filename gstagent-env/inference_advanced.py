@@ -1,11 +1,12 @@
 """
-Advanced Multi-Agent Inference with RAG.
+Advanced Multi-Agent Inference with RAG v2.
 
 This is the upgraded inference script that uses:
 1. Multi-agent orchestration (Matcher → Auditor → Reporter → Validator)
-2. RAG-augmented knowledge base for GST rules
+2. RAG v2 — query expansion, hybrid search, score thresholds, faithfulness checks
 3. Curriculum learning for difficulty progression
 4. Full observability metrics
+5. Retrieval evaluation harness for quality monitoring
 
 Usage:
     python inference_advanced.py
@@ -25,6 +26,7 @@ from environment.agents.orchestrator import Orchestrator
 from environment.config import API_BASE_URL, MODEL_NAME
 from environment.curriculum import CurriculumConfig, CurriculumManager
 from environment.knowledge.rag_engine import get_rag_engine
+from environment.knowledge.eval_rag import evaluate_retrieval
 from environment.observability import PerformanceTracker, get_metrics_collector
 
 
@@ -38,11 +40,16 @@ def main():
     print(f"  API:   {api_base}")
     print(f"  Model: {model}")
 
-    # ── Initialize RAG ───────────────────────────────────────────
-    print("\n📚 Initializing RAG Knowledge Base...")
+    # ── Initialize RAG v2 ────────────────────────────────────────
+    print("\n📚 Initializing RAG v2 Knowledge Base...")
     rag = get_rag_engine()
-    print(f"   Indexed {rag.document_count} GST knowledge documents")
-    print(f"   ITC rules context: {len(rag.get_itc_rules_context())} chars")
+    print(f"   Indexed {rag.document_count} GST knowledge documents/chunks")
+    print(f"   Features: query expansion, hybrid search, score threshold, faithfulness")
+
+    # Run eval harness to baseline retrieval quality
+    eval_report = evaluate_retrieval(rag)
+    print(f"   📊 Eval: source_hit={eval_report['source_hit_rate']:.0%}, "
+          f"keyword_hit={eval_report['keyword_hit_rate']:.0%}")
 
     # ── Initialize Curriculum ────────────────────────────────────
     config = CurriculumConfig(
@@ -69,13 +76,18 @@ def main():
         print(f"\n{'─' * 60}")
         print(f"  Task: {task_id} | Difficulty: {curriculum.get_current_difficulty()}")
 
-        # Show RAG context for this task
+        # Show RAG v2 context for this task (category-filtered retrieval)
         if task_id == "itc_audit":
             context = rag.get_itc_rules_context()
             print(f"  RAG context injected: {len(context)} chars of ITC rules")
         elif task_id == "full_recon":
             context = rag.get_reconciliation_context()
             print(f"  RAG context injected: {len(context)} chars of reconciliation guidance")
+        else:
+            context = rag.get_context_for_prompt(
+                f"invoice matching {task_id}", max_tokens=1500
+            )
+            print(f"  RAG context injected: {len(context)} chars")
 
         # Run task
         tracker = PerformanceTracker(f"adv-{task_id}", task_id)

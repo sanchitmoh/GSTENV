@@ -1,0 +1,4 @@
+# file: C:\HACKTHAON\gstagent-env\environment\knowledge\chunker.py
+# hypothesis_version: 6.151.10
+
+[200, 'category', 'chunk_index', 'content', 'id', 'parent_id', 'source', 'title']

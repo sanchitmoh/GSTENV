@@ -1,0 +1,4 @@
+# file: C:\HACKTHAON\gstagent-env\environment\knowledge\eval_rag.py
+# hypothesis_version: 6.151.10
+
+[0.0, '01.01.2022', '14th', '180 days', '20%', '5%', 'CBIC-Circular-170', 'CBIC-Circular-183', 'Credit-Note-Handling', 'Mismatch-Tolerance', 'Rule-36-4', 'Rule-37', 'Section-16-2', '__main__', '_chunk_', 'auto-generated', 'blocked', 'condition', 'content', 'credit note', 'doc_id', 'download', 'expected_keywords', 'expected_sources', 'gstin', 'gstr-1', 'gstr-2b', 'interest', 'invoice number', 'itc', 'keyword_hit_rate', 'keyword_score', 'match', 'msme', 'paid to government', 'per_query', 'query', 'reduce', 'removed', 'retrieved_ids', 'reverse', 'source_hit', 'source_hit_rate', 'source_hits', 'supplier', 'total_queries', 'variance', 'working capital', '✅', '❌']

@@ -1,0 +1,4 @@
+# file: C:\HACKTHAON\gstagent-env\environment\knowledge\rag_engine.py
+# hypothesis_version: 6.151.10
+
+[0.08, 0.2, 0.5, 1.3, 200, 2000, 'category', 'content', 'doc_id', 'rag_initialized', 'relevance', 'source', 'title', '🔴 Low', '🟡 Medium', '🟢 High']

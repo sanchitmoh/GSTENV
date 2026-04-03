@@ -1,0 +1,4 @@
+# file: C:\HACKTHAON\gstagent-env\environment\knowledge\faithfulness.py
+# hypothesis_version: 6.151.10
+
+['\\d{2,3}/\\d{4}', '\\s+', 'content', 'grounded_references', 'is_faithful', 'total_references']
