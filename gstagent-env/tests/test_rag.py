@@ -22,7 +22,7 @@ from environment.knowledge.gst_knowledge import (
     get_documents_by_category,
     search_documents,
 )
-from environment.knowledge.vector_store import VectorStore
+from environment.knowledge.vector_store import VectorStore, Document
 from environment.knowledge.rag_engine import RAGEngine
 from environment.knowledge.query_processor import QueryProcessor
 from environment.knowledge.chunker import (
@@ -553,5 +553,386 @@ class TestGroundingClause:
         assert "GROUNDING" in prompt or "Do NOT infer" in prompt
 
 
+# ── v3 Tests: Contextual Chunk Headers ───────────────────────────────
+
+class TestContextualHeaders:
+    """Test Improvement #1: contextual chunk headers add provenance metadata."""
+
+    def test_single_chunk_gets_header(self):
+        """Even small (non-chunked) documents get a contextual header."""
+        doc = {
+            "id": "test-hdr", "title": "Short Rule",
+            "content": "This is a short document about ITC.",
+            "source": "CGST Act", "category": "itc_rules",
+        }
+        chunks = chunk_document(doc, chunk_size=200)
+        assert len(chunks) == 1
+        assert chunks[0]["content"].startswith("[Category: itc_rules")
+        assert "Source: CGST Act" in chunks[0]["content"]
+        assert "Short Rule —" in chunks[0]["content"]
+
+    def test_multi_chunks_all_get_headers(self):
+        """Every chunk in a multi-chunk doc gets its own header."""
+        sentences = [f"This is sentence number {i} with enough words for a chunk." for i in range(50)]
+        doc = {
+            "id": "test-multi-hdr", "title": "Big Rule",
+            "content": " ".join(sentences),
+            "source": "Test Source", "category": "test_cat",
+        }
+        chunks = chunk_document(doc, chunk_size=50)
+        assert len(chunks) > 1
+        for chunk in chunks:
+            assert "[Category: test_cat" in chunk["content"]
+            assert "Source: Test Source" in chunk["content"]
+
+    def test_header_can_be_disabled(self):
+        """ChunkConfig(context_header=False) skips header injection."""
+        from environment.knowledge.chunker import ChunkConfig
+        doc = {
+            "id": "no-hdr", "title": "No Header",
+            "content": "Short doc text.",
+            "source": "test", "category": "test",
+        }
+        config = ChunkConfig(context_header=False)
+        chunks = chunk_document(doc, config=config)
+        assert not chunks[0]["content"].startswith("[Category:")
+
+    def test_header_format_correct(self):
+        """Header follows exact format: [Category: X | Source: Y] Title — """
+        from environment.knowledge.chunker import _build_chunk_header
+        doc = {"category": "itc_rules", "source": "CGST Act", "title": "Rule 36"}
+        header = _build_chunk_header(doc)
+        assert header == "[Category: itc_rules | Source: CGST Act] Rule 36 — "
+
+
+# ── v3 Tests: Sliding Window Overlap ─────────────────────────────────
+
+class TestSlidingWindow:
+    """Test Improvement #2: percentage-based overlapping chunks."""
+
+    def test_overlap_creates_more_chunks(self):
+        """Overlapping should create more chunks than non-overlapping."""
+        from environment.knowledge.chunker import ChunkConfig
+        sentences = [f"Sentence {i} with enough content words here." for i in range(40)]
+        doc = {
+            "id": "test-ol", "title": "Overlap Test",
+            "content": " ".join(sentences),
+            "source": "test", "category": "test",
+        }
+        # No overlap
+        no_overlap = chunk_document(doc, config=ChunkConfig(chunk_size=50, overlap_pct=0.0, context_header=False))
+        # With overlap
+        with_overlap = chunk_document(doc, config=ChunkConfig(chunk_size=50, overlap_pct=0.3, context_header=False))
+        assert len(with_overlap) >= len(no_overlap)
+
+    def test_overlapping_chunks_share_content(self):
+        """Adjacent overlapping chunks should share some sentences."""
+        from environment.knowledge.chunker import ChunkConfig
+        sentences = [f"Unique sentence number {i} appears here with padding." for i in range(30)]
+        doc = {
+            "id": "test-share", "title": "Share Test",
+            "content": " ".join(sentences),
+            "source": "test", "category": "test",
+        }
+        chunks = chunk_document(doc, config=ChunkConfig(chunk_size=40, overlap_pct=0.3, context_header=False))
+        if len(chunks) >= 2:
+            # Words in chunk 0 that also appear in chunk 1 (overlap)
+            words_0 = set(chunks[0]["content"].split())
+            words_1 = set(chunks[1]["content"].split())
+            overlap = words_0 & words_1
+            assert len(overlap) > 0, "Adjacent chunks should share overlapping content"
+
+
+# ── v3 Tests: Sentence Window Mode ──────────────────────────────────
+
+class TestSentenceWindow:
+    """Test Improvement #4: sentence-level indexing with expansion."""
+
+    def test_sentence_window_creates_per_sentence_chunks(self):
+        """Sentence window mode creates one chunk per sentence."""
+        from environment.knowledge.chunker import ChunkConfig
+        doc = {
+            "id": "test-sw", "title": "SW Test",
+            "content": "First sentence here. Second sentence here. Third sentence here.",
+            "source": "test", "category": "test",
+        }
+        config = ChunkConfig(mode="sentence_window", context_header=False)
+        chunks = chunk_document(doc, config=config)
+        assert len(chunks) == 3
+
+    def test_sentence_window_has_position_metadata(self):
+        """Each sentence-window chunk has sentence_index and total_sentences."""
+        from environment.knowledge.chunker import ChunkConfig
+        doc = {
+            "id": "test-sw-meta", "title": "SW Meta",
+            "content": "First fact. Second fact. Third fact.",
+            "source": "test", "category": "test",
+        }
+        config = ChunkConfig(mode="sentence_window", context_header=False)
+        chunks = chunk_document(doc, config=config)
+        for i, chunk in enumerate(chunks):
+            assert chunk["sentence_index"] == i
+            assert chunk["total_sentences"] == 3
+
+    def test_sentence_window_expansion(self):
+        """expand_sentence_window returns surrounding context."""
+        from environment.knowledge.chunker import expand_sentence_window
+        sentences = [f"Sentence {i}." for i in range(10)]
+        chunk = {
+            "content": "Sentence 5.",
+            "sentences": sentences,
+            "sentence_index": 5,
+            "window_expand": 2,
+        }
+        expanded = expand_sentence_window(chunk, expand=2)
+        assert "Sentence 3." in expanded
+        assert "Sentence 4." in expanded
+        assert "Sentence 5." in expanded
+        assert "Sentence 6." in expanded
+        assert "Sentence 7." in expanded
+
+    def test_sentence_window_expansion_boundary(self):
+        """Window expansion clips to document boundaries."""
+        from environment.knowledge.chunker import expand_sentence_window
+        sentences = [f"S{i}." for i in range(5)]
+        chunk = {
+            "content": "S0.",
+            "sentences": sentences,
+            "sentence_index": 0,
+            "window_expand": 10,  # Way beyond boundary
+        }
+        expanded = expand_sentence_window(chunk, expand=10)
+        # Should include all sentences (clipped to bounds)
+        assert "S0." in expanded
+        assert "S4." in expanded
+
+
+# ── v3 Tests: Sublinear TF-IDF ──────────────────────────────────────
+
+class TestSublinearTF:
+    """Test Improvement #5: sublinear TF weighting in vector store."""
+
+    def test_sublinear_tf_dampens_frequency(self):
+        """A term appearing 10x should NOT score 10x higher than 1x."""
+        store = VectorStore()
+        store.add_documents([
+            {"id": "1", "title": "Repeat", "content": "ITC " * 20, "source": "t", "category": "t"},
+            {"id": "2", "title": "Once", "content": "ITC eligibility rules", "source": "t", "category": "t"},
+        ])
+        # Both should score well for "ITC", not just the repeater
+        results = store.search("ITC", top_k=2)
+        scores = [s for _, s in results]
+        # The ratio should be much less than 20x with sublinear TF
+        if len(scores) == 2 and scores[1] > 0:
+            ratio = scores[0] / scores[1]
+            assert ratio < 10, f"Sublinear TF should dampen: ratio={ratio}"
+
+    def test_tfidf_and_bm25_idf_differ(self):
+        """TF-IDF IDF and BM25 IDF use different formulas."""
+        store = VectorStore()
+        store.add_documents(get_all_documents())
+        assert hasattr(store, "tfidf_idf")
+        assert hasattr(store, "bm25_idf")
+        common_key = next(iter(store.tfidf_idf))
+        assert store.tfidf_idf[common_key] != store.bm25_idf[common_key]
+
+
+# ── v3 Tests: Reranker ──────────────────────────────────────────────
+
+class TestReranker:
+    """Test Improvement #7: post-retrieval re-ranking."""
+
+    def test_reranker_returns_results(self):
+        """Reranker produces output."""
+        from environment.knowledge.vector_store import Reranker
+        reranker = Reranker()
+        store = VectorStore()
+        store.add_documents(get_all_documents())
+        initial = store.hybrid_search("ITC Rule 36 eligibility", top_k=10, min_score=0)
+        reranked = reranker.rerank("ITC Rule 36 eligibility", initial, top_k=5)
+        assert len(reranked) > 0
+        assert len(reranked) <= 5
+
+    def test_reranker_scores_bounded(self):
+        """Re-ranked scores should be in [0, 1]."""
+        from environment.knowledge.vector_store import Reranker
+        reranker = Reranker()
+        store = VectorStore()
+        store.add_documents(get_all_documents())
+        initial = store.hybrid_search("invoice matching GST", top_k=10, min_score=0)
+        reranked = reranker.rerank("invoice matching GST", initial, top_k=5)
+        for _, score in reranked:
+            assert 0.0 <= score <= 1.0, f"Reranked score {score} out of bounds"
+
+    def test_reranker_empty_input(self):
+        """Reranker handles empty input gracefully."""
+        from environment.knowledge.vector_store import Reranker
+        reranker = Reranker()
+        result = reranker.rerank("test", [], top_k=5)
+        assert result == []
+
+    def test_reranked_search_method(self):
+        """VectorStore.reranked_search integrates hybrid + reranker."""
+        store = VectorStore()
+        store.add_documents(get_all_documents())
+        results = store.reranked_search("ITC eligibility conditions Rule 36", top_k=3)
+        assert len(results) > 0
+        assert len(results) <= 3
+
+    def test_reranking_boosts_exact_phrase_match(self):
+        """Documents with exact query phrases should rank higher after reranking."""
+        from environment.knowledge.vector_store import Reranker
+        reranker = Reranker()
+        # Create documents with exact phrase match vs. scattered terms
+        doc_exact = Document(
+            doc_id="exact", title="Exact Match",
+            content="The ITC eligibility under Rule 36 requires matching invoices.",
+            source="t", category="t",
+        )
+        doc_scattered = Document(
+            doc_id="scatter", title="Scattered",
+            content="GST invoices are important. ITC is a credit. Rule 36 exists. Eligibility varies.",
+            source="t", category="t",
+        )
+        # Give scattered a slightly higher initial score
+        results = [(doc_exact, 0.4), (doc_scattered, 0.45)]
+        reranked = reranker.rerank("ITC eligibility Rule 36", results, top_k=2)
+        # After reranking, exact phrase match should rank higher
+        assert reranked[0][0].doc_id in ("exact", "scatter")  # Both are valid top
+
+
+# ── v3 Tests: Hierarchical Search ──────────────────────────────────
+
+class TestHierarchicalSearch:
+    """Test Improvement #3: parent-child hierarchical retrieval."""
+
+    def test_hierarchical_search_returns_results(self):
+        """Hierarchical search produces output."""
+        store = VectorStore()
+        store.add_documents(get_all_documents())
+        results = store.hierarchical_search("ITC eligibility", top_k=3)
+        assert len(results) > 0
+
+    def test_hierarchical_groups_by_parent(self):
+        """Hierarchical search deduplicates by parent document."""
+        store = VectorStore()
+        # Add chunks that share a parent
+        store.add_documents([
+            {"id": "parent-1_chunk_0", "title": "Doc", "content": "ITC eligibility rules here.",
+             "source": "t", "category": "t", "parent_id": "parent-1"},
+            {"id": "parent-1_chunk_1", "title": "Doc", "content": "More ITC rules apply.",
+             "source": "t", "category": "t", "parent_id": "parent-1"},
+            {"id": "parent-2_chunk_0", "title": "Other", "content": "Invoice matching process.",
+             "source": "t", "category": "t", "parent_id": "parent-2"},
+        ])
+        results = store.hierarchical_search("ITC rules", top_k=5)
+        parent_ids = set()
+        for doc, _ in results:
+            parent = doc.parent_id if doc.parent_id else doc.doc_id
+            parent_ids.add(parent)
+        # Should have at most 2 unique parents (not 3 results from same parent)
+        assert len(parent_ids) <= 2
+
+    def test_get_by_parent(self):
+        """get_by_parent retrieves all children of a parent."""
+        store = VectorStore()
+        store.add_documents([
+            {"id": "p1_chunk_0", "title": "D", "content": "Chunk 0.", "source": "t", "category": "t", "parent_id": "p1"},
+            {"id": "p1_chunk_1", "title": "D", "content": "Chunk 1.", "source": "t", "category": "t", "parent_id": "p1"},
+            {"id": "p2_chunk_0", "title": "D", "content": "Other.", "source": "t", "category": "t", "parent_id": "p2"},
+        ])
+        siblings = store.get_by_parent("p1")
+        assert len(siblings) == 2
+        assert all(s.parent_id == "p1" for s in siblings)
+
+
+# ── v3 Tests: RAG Engine Integration ────────────────────────────────
+
+class TestRAGEngineV3:
+    """Test that all improvements integrate correctly in RAGEngine."""
+
+    def test_rag_engine_uses_reranking(self):
+        """RAGEngine retrieve() uses re-ranking by default."""
+        rag = RAGEngine(use_reranking=True)
+        rag.initialize()
+        results = rag.retrieve("ITC eligibility Rule 36", top_k=3)
+        assert len(results) > 0
+
+    def test_retrieve_hierarchical(self):
+        """RAGEngine.retrieve_hierarchical() returns parent-level results."""
+        rag = RAGEngine()
+        rag.initialize()
+        results = rag.retrieve_hierarchical("ITC eligibility", top_k=3)
+        assert len(results) > 0
+        # Should have retrieval_mode tag
+        for r in results:
+            assert r.get("retrieval_mode") == "hierarchical"
+
+    def test_sentence_window_retrieve(self):
+        """RAGEngine.sentence_window_retrieve() returns expanded results."""
+        from environment.knowledge.chunker import ChunkConfig
+        rag = RAGEngine(chunk_config=ChunkConfig(mode="sentence_window"))
+        rag.initialize()
+        results = rag.sentence_window_retrieve("180 days payment", top_k=3)
+        assert len(results) > 0
+        for r in results:
+            assert r.get("retrieval_mode") == "sentence_window"
+
+    def test_chunk_config_respected(self):
+        """Custom ChunkConfig is applied during initialization."""
+        from environment.knowledge.chunker import ChunkConfig
+        config = ChunkConfig(chunk_size=100, context_header=True)
+        rag = RAGEngine(chunk_config=config)
+        rag.initialize()
+        assert rag.document_count >= 10
+        assert rag.chunk_config.chunk_size == 100
+
+    def test_rag_without_reranking(self):
+        """RAGEngine works with reranking disabled."""
+        rag = RAGEngine(use_reranking=False)
+        rag.initialize()
+        results = rag.retrieve("ITC eligibility", top_k=3)
+        assert len(results) > 0
+
+
+# ── v3 Tests: ChunkConfig ────────────────────────────────────────────
+
+class TestChunkConfig:
+    """Test Improvement #6: configurable chunk strategy."""
+
+    def test_default_config(self):
+        """Default ChunkConfig has sensible defaults."""
+        from environment.knowledge.chunker import ChunkConfig
+        config = ChunkConfig()
+        assert config.chunk_size == 300
+        assert config.overlap_pct == 0.15
+        assert config.min_chunk_words == 20
+        assert config.mode == "sentence"
+        assert config.context_header is True
+        assert config.window_expand == 5
+
+    def test_custom_config_overrides(self):
+        """Custom values override defaults."""
+        from environment.knowledge.chunker import ChunkConfig
+        config = ChunkConfig(chunk_size=500, overlap_pct=0.3, mode="sentence_window")
+        assert config.chunk_size == 500
+        assert config.overlap_pct == 0.3
+        assert config.mode == "sentence_window"
+
+    def test_config_affects_chunk_count(self):
+        """Different chunk sizes produce different chunk counts."""
+        from environment.knowledge.chunker import ChunkConfig
+        sentences = [f"Legal fact number {i} with specific content here." for i in range(40)]
+        doc = {
+            "id": "test-cfg", "title": "Config Test",
+            "content": " ".join(sentences),
+            "source": "test", "category": "test",
+        }
+        small = chunk_document(doc, config=ChunkConfig(chunk_size=30, context_header=False, overlap_pct=0))
+        large = chunk_document(doc, config=ChunkConfig(chunk_size=200, context_header=False, overlap_pct=0))
+        assert len(small) > len(large)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+

@@ -1,15 +1,23 @@
 """
-Vector Store v2 — enhanced retrieval with score thresholds and hybrid search.
+Vector Store v3 — enhanced retrieval with sublinear TF, re-ranking, and
+hierarchical parent-child search.
 
-Upgrades from v1:
+Upgrades from v2:
+- SUBLINEAR TF: Uses (1 + log(tf)) instead of raw tf/total — a term
+  appearing 10x shouldn't be 10x more important than appearing 1x.
+  Industry standard for information retrieval.
+- RE-RANKING: Post-retrieval cross-feature re-ranker using exact phrase
+  match, term coverage, position scoring, and original score blending.
+  Filters out false positives before final output.
+- HIERARCHICAL SEARCH: Retrieve at child chunk level for precision,
+  then expand to parent document for context. Combines the best of
+  small-chunk matching and full-document understanding.
+
+Retained from v2:
 - Score threshold filtering (min_score) — stops garbage context
 - Metadata category filtering — precision improvement
 - BM25 keyword scoring — hybrid TF-IDF + BM25 via Reciprocal Rank Fusion
 - Over-fetch-then-filter pattern for better result quality
-- Semantic embedding support ready (swap _compute_embedding method)
-
-The TF-IDF core is retained as a zero-dependency baseline. For production,
-swap to sentence-transformers (bge-small-en-v1.5) by overriding embed().
 """
 
 from __future__ import annotations
@@ -31,17 +39,121 @@ class Document:
     parent_id: str = ""      # For chunks: reference to parent document
     chunk_index: int = -1    # For chunks: position in parent
     vector: list[float] = field(default_factory=list)
+    # Sentence window metadata
+    sentence_index: int = -1
+    total_sentences: int = -1
+    sentences: list[str] = field(default_factory=list)
+    window_expand: int = 5
+
+
+class Reranker:
+    """
+    Post-retrieval re-ranker using cross-feature scoring.
+
+    Combines multiple signals to re-order initial retrieval results:
+    1. Exact phrase matching (query phrases found verbatim in doc)
+    2. Term coverage (fraction of unique query terms found in doc)
+    3. Position score (query terms appearing early rank higher)
+    4. Original retrieval score (blended for stability)
+
+    This is a zero-dependency alternative to neural re-rankers like
+    BGE-reranker or Cohere rerank. For the GST domain with TF-IDF
+    retrieval, this provides significant precision improvements.
+    """
+
+    # Blending weights
+    ORIGINAL_WEIGHT = 0.35
+    PHRASE_WEIGHT = 0.25
+    COVERAGE_WEIGHT = 0.25
+    POSITION_WEIGHT = 0.15
+
+    def rerank(
+        self,
+        query: str,
+        results: list[tuple[Document, float]],
+        top_k: int = 5,
+    ) -> list[tuple[Document, float]]:
+        """
+        Re-rank retrieval results using multi-signal scoring.
+
+        Args:
+            query: Original search query
+            results: List of (Document, score) from initial retrieval
+            top_k: Number of results to return after re-ranking
+
+        Returns:
+            Re-ranked list of (Document, score) tuples
+        """
+        if not results:
+            return []
+
+        query_lower = query.lower()
+        query_tokens = set(re.findall(r"[a-z0-9]+", query_lower))
+
+        # Extract meaningful phrases (2-3 word ngrams) from query
+        query_words = query_lower.split()
+        phrases = []
+        for n in (3, 2):
+            for i in range(len(query_words) - n + 1):
+                phrase = " ".join(query_words[i:i + n])
+                phrases.append(phrase)
+
+        reranked = []
+        for doc, original_score in results:
+            doc_text = (doc.title + " " + doc.content).lower()
+            doc_tokens = set(re.findall(r"[a-z0-9]+", doc_text))
+
+            # Signal 1: Exact phrase match count (normalized)
+            phrase_hits = sum(1 for p in phrases if p in doc_text) if phrases else 0
+            phrase_score = min(phrase_hits / max(len(phrases), 1), 1.0)
+
+            # Signal 2: Term coverage (fraction of query terms found)
+            if query_tokens:
+                coverage = len(query_tokens & doc_tokens) / len(query_tokens)
+            else:
+                coverage = 0.0
+
+            # Signal 3: Position score (early matches matter more)
+            position_score = 0.0
+            if query_tokens:
+                doc_words = doc_text.split()
+                total_words = len(doc_words)
+                if total_words > 0:
+                    first_positions = []
+                    for qt in query_tokens:
+                        for pos, word in enumerate(doc_words):
+                            if qt in word:
+                                first_positions.append(1.0 - pos / total_words)
+                                break
+                    if first_positions:
+                        position_score = sum(first_positions) / len(first_positions)
+
+            # Combined score
+            combined = (
+                self.ORIGINAL_WEIGHT * original_score
+                + self.PHRASE_WEIGHT * phrase_score
+                + self.COVERAGE_WEIGHT * coverage
+                + self.POSITION_WEIGHT * position_score
+            )
+
+            reranked.append((doc, round(combined, 6)))
+
+        reranked.sort(key=lambda x: x[1], reverse=True)
+        return reranked[:top_k]
 
 
 class VectorStore:
     """
-    Enhanced TF-IDF vector store with score thresholds and hybrid search.
+    Enhanced TF-IDF vector store with sublinear TF, score thresholds,
+    hybrid search, re-ranking, and hierarchical parent-child retrieval.
 
     Supports:
     - add_documents: batch index documents (or chunks)
     - search: find top-k with score threshold
     - search_with_filter: filter by category before scoring
     - hybrid_search: combine TF-IDF + BM25 via Reciprocal Rank Fusion
+    - reranked_search: hybrid search + re-ranking for precision
+    - hierarchical_search: retrieve child chunks, return parent context
     """
 
     # BM25 parameters
@@ -56,6 +168,7 @@ class VectorStore:
         self._doc_tokens: list[list[str]] = []  # Cached for BM25
         self._avg_dl: float = 0.0               # Average document length
         self._built = False
+        self.reranker = Reranker()
 
     def add_documents(self, docs: list[dict]) -> None:
         """Add documents to the store and build index."""
@@ -68,6 +181,10 @@ class VectorStore:
                 category=doc.get("category", ""),
                 parent_id=doc.get("parent_id", ""),
                 chunk_index=doc.get("chunk_index", -1),
+                sentence_index=doc.get("sentence_index", -1),
+                total_sentences=doc.get("total_sentences", -1),
+                sentences=doc.get("sentences", []),
+                window_expand=doc.get("window_expand", 5),
             ))
         self._build_index()
 
@@ -111,22 +228,34 @@ class VectorStore:
         total_tokens = sum(len(t) for t in self._doc_tokens)
         self._avg_dl = total_tokens / max(n_docs, 1)
 
-        # Compute TF-IDF vectors (using tfidf_idf, NOT bm25_idf)
+        # Compute TF-IDF vectors using SUBLINEAR TF (improvement #5)
         for doc, tokens in zip(self.documents, self._doc_tokens):
             doc.vector = self._compute_tfidf(tokens)
 
         self._built = True
 
     def _compute_tfidf(self, tokens: list[str]) -> list[float]:
-        """Compute TF-IDF vector using standard IDF (for cosine space)."""
+        """
+        Compute TF-IDF vector using SUBLINEAR TF weighting.
+
+        Sublinear TF: 1 + log(tf) instead of raw tf/total.
+        This dampens high-frequency terms — a word appearing 10× shouldn't
+        be 10× more important than appearing once. Industry standard.
+        """
         tf = Counter(tokens)
-        total = len(tokens) if tokens else 1
         vector = [0.0] * len(self.vocabulary)
 
         for token, count in tf.items():
             if token in self.vocabulary:
                 idx = self.vocabulary[token]
-                vector[idx] = (count / total) * self.tfidf_idf.get(token, 0)
+                # Sublinear TF: 1 + log(count) instead of count/total
+                sublinear_tf = 1 + math.log(count) if count > 0 else 0
+                vector[idx] = sublinear_tf * self.tfidf_idf.get(token, 0)
+
+        # L2 normalization for fair cosine comparison across document lengths
+        magnitude = math.sqrt(sum(v * v for v in vector))
+        if magnitude > 0:
+            vector = [v / magnitude for v in vector]
 
         return vector
 
@@ -276,6 +405,64 @@ class VectorStore:
 
         return results
 
+    def reranked_search(
+        self,
+        query: str,
+        top_k: int = 5,
+        min_score: float = 0.0,
+        fetch_multiplier: int = 3,
+    ) -> list[tuple[Document, float]]:
+        """
+        Hybrid search + re-ranking for maximum precision.
+
+        Over-fetches with hybrid search, then applies the re-ranker
+        to re-order by exact phrase match, term coverage, and position.
+        """
+        # Over-fetch to give re-ranker enough candidates
+        initial = self.hybrid_search(
+            query,
+            top_k=top_k * fetch_multiplier,
+            min_score=0,
+        )
+        return self.reranker.rerank(query, initial, top_k=top_k)
+
+    def hierarchical_search(
+        self,
+        query: str,
+        top_k: int = 5,
+        min_score: float = 0.0,
+    ) -> list[tuple[Document, float]]:
+        """
+        Hierarchical parent-child search.
+
+        1. Retrieve at child chunk level (high precision matching)
+        2. Group by parent document
+        3. Return parent-level results with best child score
+
+        This combines small-chunk precision with full-document context.
+        """
+        # Retrieve more candidates at chunk level
+        candidates = self.reranked_search(query, top_k=top_k * 3, min_score=0)
+
+        # Group by parent_id — keep best score per parent
+        parent_scores: dict[str, tuple[Document, float]] = {}
+        for doc, score in candidates:
+            parent = doc.parent_id if doc.parent_id else doc.doc_id
+            if parent not in parent_scores or score > parent_scores[parent][1]:
+                parent_scores[parent] = (doc, score)
+
+        # Sort parents by best child score
+        sorted_parents = sorted(
+            parent_scores.values(), key=lambda x: x[1], reverse=True
+        )
+
+        results = []
+        for doc, score in sorted_parents[:top_k]:
+            if score >= min_score:
+                results.append((doc, score))
+
+        return results
+
     # ── Lookup Methods ───────────────────────────────────────────────
 
     def get_by_id(self, doc_id: str) -> Document | None:
@@ -284,6 +471,13 @@ class VectorStore:
             if doc.doc_id == doc_id:
                 return doc
         return None
+
+    def get_by_parent(self, parent_id: str) -> list[Document]:
+        """Get all chunks belonging to a parent document."""
+        return [
+            doc for doc in self.documents
+            if doc.parent_id == parent_id or doc.doc_id == parent_id
+        ]
 
     def get_by_category(self, category: str) -> list[Document]:
         """Get all documents in a category."""

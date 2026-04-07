@@ -63,6 +63,59 @@ class QueryProcessor:
         "msme": ["small business", "micro enterprise", "sme", "startup"],
         "cash flow": ["working capital", "liquidity", "funds"],
         "reconciliation": ["matching", "comparison", "verification", "recon"],
+
+        # ── NEW: E-Invoicing ────────────────────────────────────────
+        "einvoice": ["e-invoice", "electronic invoice", "irn", "irp"],
+        "irn": ["invoice reference number", "e-invoice", "einvoice"],
+        "irp": ["invoice registration portal", "e-invoice portal"],
+
+        # ── NEW: Registration ───────────────────────────────────────
+        "registration": ["gstin", "registered", "enrolment", "reg"],
+        "threshold": ["limit", "turnover limit", "eligibility"],
+        "cancel": ["cancellation", "revoke", "revocation", "deregister"],
+
+        # ── NEW: Returns ────────────────────────────────────────────
+        "return": ["filing", "gstr", "form", "declaration"],
+        "qrmp": ["quarterly return", "quarterly filing", "small taxpayer"],
+        "annual": ["gstr-9", "yearly", "gstr9"],
+
+        # ── NEW: Penalties & Interest ───────────────────────────────
+        "interest": ["penalty", "late fee", "charge", "section 50"],
+        "demand": ["notice", "show cause", "scn", "section 73", "section 74"],
+
+        # ── NEW: RCM ────────────────────────────────────────────────
+        "rcm": ["reverse charge", "reverse charge mechanism", "self-invoice"],
+        "unregistered": ["non-registered", "urd", "unregistered dealer"],
+
+        # ── NEW: Composition ────────────────────────────────────────
+        "composition": ["composition scheme", "section 10", "fixed rate", "cmp-08"],
+
+        # ── NEW: Blocked Credits ────────────────────────────────────
+        "blocked": ["ineligible", "restricted", "section 17(5)", "not allowed"],
+
+        # ── NEW: Exports ────────────────────────────────────────────
+        "export": ["zero-rated", "lut", "shipping bill", "refund"],
+        "refund": ["reimbursement", "claim back", "rfd-01"],
+        "lut": ["letter of undertaking", "bond", "export without igst"],
+
+        # ── NEW: TDS/TCS ────────────────────────────────────────────
+        "tds": ["tax deducted at source", "gstr-7", "deductor"],
+        "tcs": ["tax collected at source", "gstr-8", "e-commerce"],
+
+        # ── NEW: Place of Supply ────────────────────────────────────
+        "place": ["location", "state", "jurisdiction"],
+        "interstate": ["inter-state", "cross-state", "igst"],
+        "intrastate": ["intra-state", "within state", "cgst sgst"],
+
+        # ── NEW: E-Way Bill ─────────────────────────────────────────
+        "eway": ["e-way bill", "ewb", "transport", "goods movement"],
+        "transport": ["movement", "shipping", "freight", "gta"],
+
+        # ── NEW: ISD ────────────────────────────────────────────────
+        "isd": ["input service distributor", "gstr-6", "branch credit"],
+
+        # ── NEW: Audit ──────────────────────────────────────────────
+        "assessment": ["scrutiny", "demand", "notice", "order"],
     }
 
     # Negation tokens — NEVER strip these, they invert query meaning

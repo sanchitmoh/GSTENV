@@ -21,6 +21,7 @@ from environment.knowledge.rag_engine import RAGEngine
 
 # Ground truth evaluation set — curated by domain experts
 GST_EVAL_SET: list[dict] = [
+    # ── Original 8 queries ───────────────────────────────────────────
     {
         "query": "Can I claim ITC if my supplier hasn't filed GSTR-1?",
         "expected_sources": ["Section-16-2", "CBIC-Circular-170"],
@@ -60,6 +61,86 @@ GST_EVAL_SET: list[dict] = [
         "query": "What is the step by step reconciliation process?",
         "expected_sources": ["Reconciliation-Best-Practices"],
         "expected_keywords": ["download", "match", "invoice number", "gstin"],
+    },
+
+    # ── NEW: E-Invoicing queries ─────────────────────────────────────
+    {
+        "query": "Is e-invoicing mandatory and what is IRN?",
+        "expected_sources": ["E-Invoice-Mandate"],
+        "expected_keywords": ["irn", "irp", "b2b", "₹5 cr"],
+    },
+    {
+        "query": "Can I cancel an e-invoice after 24 hours?",
+        "expected_sources": ["E-Invoice-Cancellation"],
+        "expected_keywords": ["24 hours", "credit note", "cancelled"],
+    },
+
+    # ── NEW: Registration queries ────────────────────────────────────
+    {
+        "query": "What is the turnover limit for GST registration?",
+        "expected_sources": ["GST-Registration-Threshold"],
+        "expected_keywords": ["₹40 lakh", "₹20 lakh", "mandatory"],
+    },
+
+    # ── NEW: Returns queries ─────────────────────────────────────────
+    {
+        "query": "What is the due date for filing GSTR-3B?",
+        "expected_sources": ["GSTR-3B-Filing"],
+        "expected_keywords": ["20th", "18%", "nil return"],
+    },
+    {
+        "query": "What is QRMP scheme and who is eligible?",
+        "expected_sources": ["QRMP-Scheme"],
+        "expected_keywords": ["quarterly", "₹5 cr", "pmt-06"],
+    },
+
+    # ── NEW: Penalties queries ───────────────────────────────────────
+    {
+        "query": "What is the interest rate on wrong ITC claims?",
+        "expected_sources": ["GST-Interest-on-ITC", "GST-Penalties-Interest"],
+        "expected_keywords": ["24%", "18%", "availed", "utilized"],
+    },
+
+    # ── NEW: RCM queries ────────────────────────────────────────────
+    {
+        "query": "What is reverse charge mechanism and when does it apply?",
+        "expected_sources": ["Reverse-Charge-Mechanism"],
+        "expected_keywords": ["recipient", "rcm", "self-invoice"],
+    },
+
+    # ── NEW: Blocked credits query ──────────────────────────────────
+    {
+        "query": "Which items are blocked from ITC under Section 17(5)?",
+        "expected_sources": ["Blocked-Credits-Section-17-5"],
+        "expected_keywords": ["motor vehicle", "food", "construction"],
+    },
+
+    # ── NEW: Place of supply query ──────────────────────────────────
+    {
+        "query": "How is place of supply determined for inter-state goods?",
+        "expected_sources": ["Place-of-Supply-Goods"],
+        "expected_keywords": ["igst", "movement", "terminates"],
+    },
+
+    # ── NEW: Exports query ──────────────────────────────────────────
+    {
+        "query": "How do I claim GST refund on exports?",
+        "expected_sources": ["GST-Exports-Refund"],
+        "expected_keywords": ["zero-rated", "lut", "refund"],
+    },
+
+    # ── NEW: Time limit query ───────────────────────────────────────
+    {
+        "query": "What is the time limit for claiming ITC under Section 16(4)?",
+        "expected_sources": ["Section-16-4-Time-Limit"],
+        "expected_keywords": ["30th november", "annual return", "lapses"],
+    },
+
+    # ── NEW: E-Way Bill query ───────────────────────────────────────
+    {
+        "query": "When is e-way bill required for goods transport?",
+        "expected_sources": ["E-Way-Bill"],
+        "expected_keywords": ["₹50,000", "200 km", "part-b"],
     },
 ]
 

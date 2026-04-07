@@ -1,7 +1,18 @@
 """
-RAG Engine v2 — production-grade Retrieval-Augmented Generation for GST agents.
+RAG Engine v3 — production-grade Retrieval-Augmented Generation for GST agents.
 
-Upgrades from v1:
+Upgrades from v2:
+- Contextual chunk headers for provenance tracking
+- Percentage-based sliding window overlap for better boundary handling
+- Hierarchical retrieval: child-chunk precision + parent-document context
+- Sentence-window retrieval: sentence-level indexing + ±N expansion
+- Sublinear TF embeddings for improved semantic matching
+- Post-retrieval re-ranking with multi-signal scoring
+- Configurable chunk strategy via ChunkConfig
+
+Pipeline: Query → Expand → Decompose → Hybrid Search → Re-rank → Filter → Budget → Format
+
+Retained from v2:
 - Query expansion via GST synonym processor (biggest retrieval improvement)
 - Score threshold filtering (min_score=0.08 — stops noise)
 - Metadata category filtering for precise retrieval
@@ -10,15 +21,17 @@ Upgrades from v1:
 - Document chunking support
 - Faithfulness grounding check for LLM responses
 - Confidence-tagged context sections (High/Medium/Low)
-
-Pipeline: Query → Expand → Decompose → Hybrid Search → Filter → Budget → Format
 """
 
 from __future__ import annotations
 
 import structlog
 
-from environment.knowledge.chunker import chunk_all_documents
+from environment.knowledge.chunker import (
+    ChunkConfig,
+    chunk_all_documents,
+    expand_sentence_window,
+)
 from environment.knowledge.faithfulness import assert_grounded, get_grounding_report
 from environment.knowledge.gst_knowledge import get_all_documents
 from environment.knowledge.query_processor import QueryProcessor
@@ -41,8 +54,14 @@ class RAGEngine:
         engine = RAGEngine()
         engine.initialize()
 
-        # Simple retrieval
+        # Simple retrieval (with re-ranking)
         results = engine.retrieve("What is Rule 36(4)?", top_k=3)
+
+        # Hierarchical: child-chunk precision, parent-doc context
+        results = engine.retrieve_hierarchical("ITC eligibility", top_k=3)
+
+        # Sentence-window: sentence-level precision, expanded context
+        results = engine.sentence_window_retrieve("180 days payment", top_k=3)
 
         # Context for LLM prompt (with token budget)
         context = engine.get_context_for_prompt("invoice matching", max_tokens=2000)
@@ -58,15 +77,24 @@ class RAGEngine:
         self,
         min_score: float = DEFAULT_MIN_SCORE,
         use_hybrid: bool = True,
-        chunk_size: int = 200,
+        chunk_size: int = 300,
         chunk_overlap: int = 40,
+        chunk_config: ChunkConfig | None = None,
+        use_reranking: bool = True,
     ):
         self.store = VectorStore()
         self.query_processor = QueryProcessor()
         self.min_score = min_score
         self.use_hybrid = use_hybrid
+        self.use_reranking = use_reranking
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.chunk_config = chunk_config or ChunkConfig(
+            chunk_size=chunk_size,
+            overlap_pct=0.15,
+            context_header=True,
+            mode="sentence",
+        )
         self._initialized = False
 
     def initialize(self) -> None:
@@ -76,11 +104,10 @@ class RAGEngine:
 
         raw_docs = get_all_documents()
 
-        # Chunk documents (small ones pass through unchanged)
+        # Chunk documents using ChunkConfig (small ones pass through with headers)
         chunked_docs = chunk_all_documents(
             raw_docs,
-            chunk_size=self.chunk_size,
-            overlap_sentences=self.chunk_overlap,
+            config=self.chunk_config,
         )
 
         self.store.add_documents(chunked_docs)
@@ -90,6 +117,9 @@ class RAGEngine:
             "rag_initialized",
             raw_documents=len(raw_docs),
             indexed_chunks=self.store.count,
+            chunk_mode=self.chunk_config.mode,
+            context_headers=self.chunk_config.context_header,
+            reranking=self.use_reranking,
         )
 
     def retrieve(
@@ -105,8 +135,9 @@ class RAGEngine:
         Pipeline:
         1. Expand query with GST synonyms
         2. Search (hybrid or TF-IDF, optionally filtered by category)
-        3. Filter by minimum score threshold
-        4. Return structured results with relevance scores
+        3. Re-rank results for precision (if enabled)
+        4. Filter by minimum score threshold
+        5. Return structured results with relevance scores
 
         Args:
             query: User's question or search text
@@ -132,6 +163,11 @@ class RAGEngine:
             results = self.store.search_with_filter(
                 expanded_query, category_filter, top_k=fetch_k, min_score=threshold,
             )
+        elif self.use_reranking:
+            # Use re-ranked hybrid search for best precision
+            results = self.store.reranked_search(
+                expanded_query, top_k=fetch_k, min_score=0,
+            )
         elif self.use_hybrid:
             results = self.store.hybrid_search(
                 expanded_query, top_k=fetch_k, min_score=0,
@@ -154,6 +190,126 @@ class RAGEngine:
             })
 
         return output[:top_k]
+
+    def retrieve_hierarchical(
+        self,
+        query: str,
+        top_k: int = 3,
+        min_score: float | None = None,
+    ) -> list[dict]:
+        """
+        Hierarchical retrieval: child-chunk precision + parent-doc context.
+
+        Retrieves at the chunk level (small, precise matches), then groups by
+        parent document. For each parent, returns all its chunks' content
+        combined, giving the model both precision and full context.
+
+        Best for: complex questions needing full document understanding.
+        """
+        if not self._initialized:
+            self.initialize()
+
+        threshold = min_score if min_score is not None else self.min_score
+        expanded_query = self.query_processor.process(query)
+
+        # Hierarchical search: matches chunks, groups by parent
+        results = self.store.hierarchical_search(
+            expanded_query, top_k=top_k, min_score=threshold,
+        )
+
+        output = []
+        for doc, score in results:
+            # Collect all sibling chunks of this parent for full context
+            parent_id = doc.parent_id if doc.parent_id else doc.doc_id
+            siblings = self.store.get_by_parent(parent_id)
+
+            if len(siblings) > 1:
+                # Combine all sibling chunks (sorted by chunk_index)
+                siblings.sort(key=lambda d: d.chunk_index)
+                combined_content = " ".join(s.content for s in siblings)
+            else:
+                combined_content = doc.content
+
+            output.append({
+                "title": doc.title,
+                "content": combined_content,
+                "source": doc.source,
+                "category": doc.category,
+                "relevance": round(score, 4),
+                "doc_id": parent_id,
+                "retrieval_mode": "hierarchical",
+            })
+
+        return output[:top_k]
+
+    def sentence_window_retrieve(
+        self,
+        query: str,
+        top_k: int = 3,
+        expand: int = 5,
+        min_score: float | None = None,
+    ) -> list[dict]:
+        """
+        Sentence-window retrieval: sentence-level precision + expanded context.
+
+        Requires sentence_window mode in ChunkConfig. Retrieves the most
+        relevant individual sentences, then expands each to include ±expand
+        surrounding sentences for context.
+
+        Best for: precise fact-finding within long documents.
+        """
+        if not self._initialized:
+            self.initialize()
+
+        threshold = min_score if min_score is not None else self.min_score
+        expanded_query = self.query_processor.process(query)
+
+        # Search at sentence level
+        if self.use_reranking:
+            results = self.store.reranked_search(
+                expanded_query, top_k=top_k * 2, min_score=0,
+            )
+        else:
+            results = self.store.hybrid_search(
+                expanded_query, top_k=top_k * 2, min_score=0,
+            )
+
+        # Deduplicate by parent and expand sentence windows
+        seen_parents: set[str] = set()
+        output = []
+
+        for doc, score in results:
+            parent = doc.parent_id if doc.parent_id else doc.doc_id
+            if parent in seen_parents:
+                continue
+            seen_parents.add(parent)
+
+            # Expand sentence window if this chunk has sentence metadata
+            if doc.sentences and doc.sentence_index >= 0:
+                chunk_dict = {
+                    "content": doc.content,
+                    "sentences": doc.sentences,
+                    "sentence_index": doc.sentence_index,
+                    "window_expand": doc.window_expand,
+                }
+                expanded_content = expand_sentence_window(chunk_dict, expand=expand)
+            else:
+                expanded_content = doc.content
+
+            output.append({
+                "title": doc.title,
+                "content": expanded_content,
+                "source": doc.source,
+                "category": doc.category,
+                "relevance": round(score, 4),
+                "doc_id": doc.doc_id,
+                "retrieval_mode": "sentence_window",
+            })
+
+            if len(output) >= top_k:
+                break
+
+        return output
 
     def retrieve_multi(self, query: str, top_k: int = 3) -> list[dict]:
         """
@@ -194,6 +350,8 @@ class RAGEngine:
     ) -> str:
         """
         Get formatted context with token-budget enforcement.
+
+        Uses hierarchical retrieval by default for best context quality.
 
         Returns markdown-formatted knowledge sections with:
         - Relevance-ordered results (best first)
