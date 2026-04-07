@@ -80,7 +80,7 @@ class RAGEngine:
         chunked_docs = chunk_all_documents(
             raw_docs,
             chunk_size=self.chunk_size,
-            overlap=self.chunk_overlap,
+            overlap_sentences=self.chunk_overlap,
         )
 
         self.store.add_documents(chunked_docs)
@@ -160,7 +160,8 @@ class RAGEngine:
         Decompose compound queries and retrieve for each sub-query.
 
         "What about ITC rules and also reconciliation?" → retrieves for both,
-        then deduplicates by doc_id.
+        then deduplicates by PARENT document (not chunk ID) to ensure
+        diverse source coverage instead of 3 chunks from one document.
         """
         if not self._initialized:
             self.initialize()
@@ -170,14 +171,15 @@ class RAGEngine:
         if len(sub_queries) <= 1:
             return self.retrieve(query, top_k=top_k)
 
-        seen_ids: set[str] = set()
+        seen_parents: set[str] = set()
         combined: list[dict] = []
 
         for sub_query in sub_queries:
             results = self.retrieve(sub_query, top_k=top_k)
             for r in results:
-                if r["doc_id"] not in seen_ids:
-                    seen_ids.add(r["doc_id"])
+                parent = r["doc_id"].split("_chunk_")[0]
+                if parent not in seen_parents:
+                    seen_parents.add(parent)
                     combined.append(r)
 
         # Sort by relevance, return top_k

@@ -11,6 +11,18 @@ import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
+# Shared grounding clause — injected into every agent's system prompt
+# This is the final 10% gap between "rarely hallucinates" and "provably cannot"
+GROUNDING_CLAUSE = """
+CRITICAL GROUNDING RULE:
+If the retrieved GST knowledge does not contain the specific rule, circular,
+percentage, amount, or date needed to answer the question, respond with:
+"I don't have a verified source for this in the current knowledge base.
+Please consult CBIC directly or refer to the GST portal at cbic-gst.gov.in."
+Do NOT infer, extrapolate, or recall training knowledge for GST compliance answers.
+Only cite rules, sections, circulars, and numbers that appear in the provided context.
+"""
+
 
 @dataclass
 class AgentMessage:

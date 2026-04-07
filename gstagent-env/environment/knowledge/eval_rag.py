@@ -1,15 +1,21 @@
 """
-RAG Evaluation Harness — ground truth test cases for retrieval quality.
+RAG Evaluation Harness v2 — ground truth test cases for retrieval quality.
 
 Measures:
-- Source Hit Rate: Are the right documents being retrieved?
+- Source Hit Rate: Are the right parent documents being retrieved?
 - Keyword Hit Rate: Does the retrieved context contain expected terms?
+
+Fixes from v1:
+- Uses explicit parent_id resolution instead of fragile substring matching
+- Normalizes whitespace and currency symbols for keyword matching
 
 Run before and after every change to the retrieval pipeline.
 This is what keeps the system honest — no eval = flying blind.
 """
 
 from __future__ import annotations
+
+import re
 
 from environment.knowledge.rag_engine import RAGEngine
 
@@ -58,6 +64,24 @@ GST_EVAL_SET: list[dict] = [
 ]
 
 
+def _normalize(text: str) -> str:
+    """Normalize text for flexible matching: lowercase, collapse whitespace, handle currency."""
+    text = text.lower()
+    text = text.replace("₹", "rs").replace("rs.", "rs")
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def _resolve_parent_ids(results: list[dict]) -> set[str]:
+    """Extract parent document IDs from results (handles chunk IDs)."""
+    parents = set()
+    for r in results:
+        doc_id = r.get("doc_id", "")
+        parent = doc_id.split("_chunk_")[0]
+        parents.add(parent)
+    return parents
+
+
 def evaluate_retrieval(engine: RAGEngine | None = None, verbose: bool = False) -> dict:
     """
     Run the evaluation harness against the RAG engine.
@@ -76,24 +100,19 @@ def evaluate_retrieval(engine: RAGEngine | None = None, verbose: bool = False) -
     for case in GST_EVAL_SET:
         results = engine.retrieve(case["query"], top_k=3)
 
-        # Source hit: did we retrieve at least one expected document?
-        retrieved_ids = set()
-        for r in results:
-            retrieved_ids.add(r.get("doc_id", ""))
-            # Also check parent_id for chunks
-            parent = r.get("doc_id", "").split("_chunk_")[0]
-            retrieved_ids.add(parent)
-
+        # Source hit: resolve parent IDs and check for exact match
+        retrieved_parents = _resolve_parent_ids(results)
         source_hit = any(
-            src in retrieved_ids or any(src in rid for rid in retrieved_ids)
-            for src in case["expected_sources"]
+            src in retrieved_parents for src in case["expected_sources"]
         )
 
-        # Keyword hit: what fraction of expected keywords appear in context?
-        context = " ".join(r["content"] for r in results).lower()
+        # Keyword hit: normalize context for flexible matching
+        raw_context = " ".join(r["content"] for r in results)
+        context = _normalize(raw_context)
+
         keyword_hits = sum(
             1 for kw in case["expected_keywords"]
-            if kw.lower() in context
+            if _normalize(kw) in context
         )
         keyword_score = keyword_hits / max(len(case["expected_keywords"]), 1)
 
@@ -104,7 +123,7 @@ def evaluate_retrieval(engine: RAGEngine | None = None, verbose: bool = False) -
             "query": case["query"],
             "source_hit": source_hit,
             "keyword_score": round(keyword_score, 2),
-            "retrieved_ids": list(retrieved_ids),
+            "retrieved_parents": sorted(retrieved_parents),
             "expected_sources": case["expected_sources"],
         }
         per_query.append(query_result)
@@ -114,7 +133,7 @@ def evaluate_retrieval(engine: RAGEngine | None = None, verbose: bool = False) -
             print(f"{status} [{keyword_score:.0%}] {case['query']}")
             if not source_hit:
                 print(f"   Expected: {case['expected_sources']}")
-                print(f"   Got:      {list(retrieved_ids)}")
+                print(f"   Got:      {sorted(retrieved_parents)}")
 
     n = len(GST_EVAL_SET)
     report = {
@@ -133,5 +152,5 @@ def evaluate_retrieval(engine: RAGEngine | None = None, verbose: bool = False) -
 
 
 if __name__ == "__main__":
-    print("🔍 Running RAG Evaluation Harness...\n")
+    print("🔍 Running RAG Evaluation Harness v2...\n")
     evaluate_retrieval(verbose=True)

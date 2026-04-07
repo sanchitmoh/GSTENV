@@ -8,7 +8,7 @@ decisions but adds reasoning context for the orchestrator.
 
 from __future__ import annotations
 
-from environment.agents.base_agent import AgentMessage, BaseAgent
+from environment.agents.base_agent import AgentMessage, BaseAgent, GROUNDING_CLAUSE
 from environment.rules.gst_rules import (
     calculate_itc_amount,
     check_itc_eligibility,
@@ -46,7 +46,8 @@ For each invoice provide:
 - ITC amount claimable
 - recommended action (claim full, claim partial, follow up with supplier)
 
-Cite the specific rule for each decision."""
+Cite the specific rule for each decision.
+""" + GROUNDING_CLAUSE
 
     def process(
         self, observation: dict, context: list[AgentMessage]

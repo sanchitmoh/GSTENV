@@ -7,7 +7,7 @@ comprehensive report suitable for submission via submit_report action.
 
 from __future__ import annotations
 
-from environment.agents.base_agent import AgentMessage, BaseAgent
+from environment.agents.base_agent import AgentMessage, BaseAgent, GROUNDING_CLAUSE
 
 
 class ReporterAgent(BaseAgent):
@@ -41,7 +41,8 @@ Output format for submit_report action:
   "decisions": {"INV-0001": "eligible", "INV-0002": "ineligible", ...}
 }
 
-Be precise. Use exact invoice IDs from the data. Never invent IDs."""
+Be precise. Use exact invoice IDs from the data. Never invent IDs.
+""" + GROUNDING_CLAUSE
 
     def process(
         self, observation: dict, context: list[AgentMessage]

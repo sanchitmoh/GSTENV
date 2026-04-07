@@ -65,18 +65,23 @@ class QueryProcessor:
         "reconciliation": ["matching", "comparison", "verification", "recon"],
     }
 
-    # Stop words to remove for cleaner matching
+    # Negation tokens — NEVER strip these, they invert query meaning
+    NEGATION_TOKENS: set[str] = {
+        "not", "no", "don", "doesn", "didn", "won", "isn", "aren",
+        "cant", "cannot", "without", "never", "neither", "nor",
+    }
+
+    # Stop words to remove — negation tokens deliberately excluded
     STOP_WORDS: set[str] = {
         "what", "how", "when", "where", "why", "who", "which",
         "is", "are", "was", "were", "be", "been", "being",
         "have", "has", "had", "do", "does", "did",
-        "the", "a", "an", "and", "or", "but", "in", "on", "at",
+        "the", "a", "an", "or", "but", "in", "on", "at",
         "to", "for", "of", "with", "by", "from", "as", "into",
         "this", "that", "these", "those", "it", "its",
         "can", "will", "would", "should", "could", "may", "might",
         "my", "your", "our", "their", "if", "i", "me", "we",
-        "not", "no", "don", "doesn", "didn", "won", "isn", "aren",
-        "about", "also", "just", "very", "so", "than",
+        "about", "just", "very", "so", "than",
     }
 
     def expand(self, query: str) -> str:
@@ -97,9 +102,12 @@ class QueryProcessor:
         return " ".join(sorted(expanded))
 
     def clean(self, query: str) -> str:
-        """Remove stop words for cleaner keyword matching."""
+        """Remove stop words while preserving negation tokens."""
         tokens = query.lower().split()
-        return " ".join(t for t in tokens if t not in self.STOP_WORDS and len(t) > 1)
+        return " ".join(
+            t for t in tokens
+            if (t in self.NEGATION_TOKENS or t not in self.STOP_WORDS) and len(t) > 1
+        )
 
     def decompose(self, query: str) -> list[str]:
         """
@@ -118,10 +126,12 @@ class QueryProcessor:
 
     def process(self, query: str) -> str:
         """
-        Full pipeline: clean → expand → return optimized query.
+        Full pipeline: expand → clean → return optimized query.
 
-        This is the main entry point for the retrieval pipeline.
+        IMPORTANT: expand FIRST so synonyms are added while negation
+        context is intact, THEN clean to remove neutral stop words.
+        Reverse order would strip "not" before expansion, inverting meaning.
         """
-        cleaned = self.clean(query)
-        expanded = self.expand(cleaned)
-        return expanded
+        expanded = self.expand(query)
+        cleaned = self.clean(expanded)
+        return cleaned
