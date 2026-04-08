@@ -1,17 +1,13 @@
 """
-RAG knowledge base for GST domain expertise.
+GST Knowledge Module v4 — production-grade RAG with 14 improvements.
 
-Modules:
-- gst_knowledge: Curated knowledge corpus (30 documents covering ITC, e-invoicing,
-  registration, returns, penalties, RCM, composition, blocked credits, TDS/TCS,
-  place of supply, exports, anti-profiteering, ISD, e-way bill, audit, and more)
-- vector_store: TF-IDF + BM25 hybrid vector store with sublinear TF, re-ranking,
-  and hierarchical parent-child retrieval
-- rag_engine: Full retrieval-augmented generation pipeline with contextual chunking,
-  sentence-window retrieval, and re-ranking
-- query_processor: GST domain synonym expansion (55+ mappings) and query rewriting
-- chunker: Sentence-aware splitting with contextual headers, sliding windows,
-  configurable strategy, and sentence-window mode
-- faithfulness: Post-generation grounding assertions (legal + numeric claims)
-- eval_rag: Retrieval quality evaluation harness (20 ground-truth queries)
+Components:
+- gst_knowledge: curated GST domain knowledge corpus
+- chunker: sentence-aware chunking with contextual headers
+- vector_store: TF-IDF/BM25 hybrid with inverted indices + caching
+- query_processor: GST synonym expansion and stop word removal
+- query_router: auto-routing, semantic cache, RAG-fusion, HyDE, GraphRAG, Self-RAG
+- rag_engine: orchestrates all components into a retrieval pipeline
+- eval_rag: evaluation harness with MRR/NDCG metrics
+- faithfulness: grounding checker for LLM responses
 """

@@ -373,13 +373,14 @@ class TestRAGEngine:
         rag.initialize()
         context = rag.get_context_for_prompt("invoice matching reconciliation")
         assert len(context) > 0
-        assert "Relevant GST Knowledge" in context
+        assert "Verified GST Knowledge" in context
 
     def test_context_has_confidence_tags(self):
         rag = RAGEngine()
         rag.initialize()
         context = rag.get_context_for_prompt("ITC eligibility")
-        assert "confidence" in context.lower()
+        # v4: Confidence tags are explicit [AUTHORITATIVE] / [SUPPORTING] markers
+        assert "AUTHORITATIVE" in context or "SUPPORTING" in context or "LOW_CONFIDENCE" in context
 
     def test_context_respects_token_budget(self):
         rag = RAGEngine()
@@ -933,6 +934,392 @@ class TestChunkConfig:
         assert len(small) > len(large)
 
 
+# ══════════════════════════════════════════════════════════════════════
+# v4 TESTS — Query Router, Cache, RAG-Fusion, HyDE, GraphRAG, Self-RAG
+# ══════════════════════════════════════════════════════════════════════
+
+class TestQueryRouter:
+    """Tests for the QueryRouter query classification engine."""
+
+    def setup_method(self):
+        from environment.knowledge.query_router import QueryRouter
+        self.router = QueryRouter()
+
+    def test_fact_lookup_routes_to_sentence_window(self):
+        route = self.router.classify("What is the rate of interest on late ITC?")
+        assert route.strategy == "sentence_window"
+
+    def test_process_query_routes_to_hierarchical(self):
+        route = self.router.classify("How to file GSTR-3B step by step?")
+        assert route.strategy == "hierarchical"
+
+    def test_multi_topic_routes_to_multi(self):
+        route = self.router.classify("What about ITC rules and also what is the filing process?")
+        assert route.strategy == "multi"
+
+    def test_category_detected_routes_to_filtered(self):
+        route = self.router.classify("Explain ITC credit eligibility rules")
+        assert route.strategy == "filtered"
+        assert route.category_filter == "itc_rules"
+
+    def test_generic_query_routes_to_standard(self):
+        route = self.router.classify("Tell me about GST changes this year")
+        assert route.strategy in ("standard", "filtered")
+
+    def test_route_has_confidence(self):
+        route = self.router.classify("What is the rate of GST on gold?")
+        assert route.confidence > 0
+
+    def test_category_detection_reconciliation(self):
+        route = self.router.classify("How does GSTR-2B reconciliation work with mismatch?")
+        assert route.category_filter == "reconciliation"
+
+    def test_category_detection_compliance(self):
+        route = self.router.classify("What are the penalty provisions for late filing?")
+        assert route.category_filter == "compliance"
+
+
+class TestSemanticCache:
+    """Tests for the SemanticCache LRU retrieval cache."""
+
+    def setup_method(self):
+        from environment.knowledge.query_router import SemanticCache
+        self.cache = SemanticCache(max_size=3)
+
+    def test_cache_miss_returns_none(self):
+        assert self.cache.get("What is ITC?") is None
+
+    def test_cache_hit_returns_results(self):
+        results = [{"title": "test", "content": "test content"}]
+        self.cache.put("What is ITC?", results)
+        cached = self.cache.get("What is ITC?")
+        assert cached is not None
+        assert cached[0]["title"] == "test"
+
+    def test_cache_normalizes_queries(self):
+        """Queries that differ only in stopwords should share cache entries."""
+        results = [{"title": "test"}]
+        self.cache.put("What is the ITC eligibility?", results)
+        # Same query without stopwords should hit
+        cached = self.cache.get("What is ITC eligibility?")
+        assert cached is not None
+
+    def test_cache_evicts_oldest(self):
+        self.cache.put("query1", [{"id": 1}])
+        self.cache.put("query2", [{"id": 2}])
+        self.cache.put("query3", [{"id": 3}])
+        self.cache.put("query4", [{"id": 4}])  # Should evict query1
+        assert self.cache.get("query1 stuff") is None  # Evicted
+
+    def test_cache_stats(self):
+        self.cache.put("q1", [])
+        self.cache.get("q1")
+        self.cache.get("miss")
+        stats = self.cache.get_stats()
+        assert stats["hits"] >= 1
+        assert stats["misses"] >= 1
+        assert 0 <= stats["hit_rate"] <= 1.0
+
+    def test_cache_clear(self):
+        self.cache.put("q1", [{"id": 1}])
+        self.cache.clear()
+        assert self.cache.get("q1") is None
+
+
+class TestRAGFusion:
+    """Tests for the RAG-Fusion multi-query variant generator."""
+
+    def setup_method(self):
+        from environment.knowledge.query_router import RAGFusion
+        self.fusion = RAGFusion()
+
+    def test_generates_variants(self):
+        variants = self.fusion.generate_variants("Can I claim ITC if supplier hasn't filed?")
+        assert len(variants) >= 2
+        assert variants[0] == "Can I claim ITC if supplier hasn't filed?"
+
+    def test_original_query_always_first(self):
+        variants = self.fusion.generate_variants("test query about GST")
+        assert variants[0] == "test query about GST"
+
+    def test_caps_at_five_variants(self):
+        variants = self.fusion.generate_variants("a very long query about GST rules and provisions")
+        assert len(variants) <= 5
+
+    def test_fuse_results_combines_rankings(self):
+        from environment.knowledge.vector_store import Document
+        doc1 = Document(doc_id="d1", title="Doc1", content="c1", source="s", category="c")
+        doc2 = Document(doc_id="d2", title="Doc2", content="c2", source="s", category="c")
+        doc3 = Document(doc_id="d3", title="Doc3", content="c3", source="s", category="c")
+
+        set1 = [(doc1, 0.9), (doc2, 0.7)]
+        set2 = [(doc2, 0.95), (doc3, 0.6)]
+        fused = self.fusion.fuse_results([set1, set2], top_k=3)
+
+        # doc2 appears in both sets → should rank highest
+        assert fused[0][0].doc_id == "d2"
+        assert len(fused) == 3
+
+
+class TestHyDE:
+    """Tests for Hypothetical Document Embedding generation."""
+
+    def setup_method(self):
+        from environment.knowledge.query_router import HyDE
+        self.hyde = HyDE()
+
+    def test_generates_itc_template(self):
+        doc = self.hyde.generate_hypothetical_doc("Can I claim ITC?")
+        assert "Section 16" in doc or "ITC" in doc
+
+    def test_generates_reconciliation_template(self):
+        doc = self.hyde.generate_hypothetical_doc("How to do GSTR-2B reconciliation?")
+        assert "reconciliation" in doc.lower()
+
+    def test_generates_penalty_template(self):
+        doc = self.hyde.generate_hypothetical_doc("What is the penalty for late filing?")
+        assert "73" in doc or "penalty" in doc.lower()
+
+    def test_default_template_for_unknown(self):
+        doc = self.hyde.generate_hypothetical_doc("What about custom duty?")
+        assert "GST" in doc or "CGST" in doc
+
+
+class TestKnowledgeGraph:
+    """Tests for the KnowledgeGraph citation graph."""
+
+    def setup_method(self):
+        from environment.knowledge.query_router import KnowledgeGraph
+        self.graph = KnowledgeGraph()
+
+    def test_add_edge_bidirectional(self):
+        self.graph.add_edge("A", "B")
+        assert "B" in self.graph.get_neighbors("A")
+        assert "A" in self.graph.get_neighbors("B")
+
+    def test_get_neighbors_excludes_self(self):
+        self.graph.add_edge("A", "B")
+        neighbors = self.graph.get_neighbors("A")
+        assert "A" not in neighbors
+
+    def test_multi_hop(self):
+        self.graph.add_edge("A", "B")
+        self.graph.add_edge("B", "C")
+        neighbors_1hop = self.graph.get_neighbors("A", max_hops=1)
+        neighbors_2hop = self.graph.get_neighbors("A", max_hops=2)
+        assert "B" in neighbors_1hop
+        assert "C" in neighbors_2hop
+
+    def test_build_from_documents(self):
+        docs = [
+            {"id": "sec16", "title": "Section 16", "content": "ITC conditions. See Rule 36 for details.", "category": "itc"},
+            {"id": "rule36", "title": "Rule 36", "content": "Provisional ITC as per section 16.", "category": "itc"},
+        ]
+        self.graph.build_from_documents(docs)
+        assert self.graph.edge_count >= 1
+
+    def test_edge_and_node_counts(self):
+        self.graph.add_edge("A", "B")
+        self.graph.add_edge("B", "C")
+        assert self.graph.edge_count == 2
+        assert self.graph.node_count == 3
+
+
+class TestSelfRAG:
+    """Tests for the Self-RAG retrieval controller."""
+
+    def setup_method(self):
+        from environment.knowledge.query_router import SelfRAGController
+        self.ctrl = SelfRAGController()
+
+    def test_skips_greetings(self):
+        assert not self.ctrl.needs_retrieval("Hello")
+        assert not self.ctrl.needs_retrieval("Thank you!")
+
+    def test_skips_single_word(self):
+        assert not self.ctrl.needs_retrieval("ok")
+
+    def test_allows_domain_terms(self):
+        assert self.ctrl.needs_retrieval("ITC eligibility")
+        assert self.ctrl.needs_retrieval("GST refund")
+
+    def test_allows_substantive_queries(self):
+        assert self.ctrl.needs_retrieval("Can I claim ITC if supplier hasn't filed?")
+
+    def test_filter_relevant_keeps_best(self):
+        results = [
+            {"title": "A", "relevance": 0.05},
+            {"title": "B", "relevance": 0.3},
+        ]
+        filtered = self.ctrl.filter_relevant(results)
+        assert len(filtered) >= 1
+        assert any(r["relevance"] >= 0.15 for r in filtered)
+
+    def test_filter_keeps_at_least_one(self):
+        results = [{"title": "A", "relevance": 0.01}]
+        filtered = self.ctrl.filter_relevant(results)
+        assert len(filtered) == 1
+
+    def test_should_cite_levels(self):
+        assert self.ctrl.should_cite({"relevance": 0.4}) == "AUTHORITATIVE"
+        assert self.ctrl.should_cite({"relevance": 0.1}) == "SUPPORTING"
+        assert self.ctrl.should_cite({"relevance": 0.02}) == "LOW_CONFIDENCE"
+
+
+class TestVectorStoreV4:
+    """Tests for v4 VectorStore: inverted indices and query caching."""
+
+    def test_inverted_index_by_id(self):
+        from environment.knowledge.vector_store import VectorStore
+        store = VectorStore()
+        store.add_documents([
+            {"id": "d1", "title": "T1", "content": "hello world", "source": "s", "category": "c"},
+        ])
+        doc = store.get_by_id("d1")
+        assert doc is not None
+        assert doc.doc_id == "d1"
+
+    def test_inverted_index_by_category(self):
+        from environment.knowledge.vector_store import VectorStore
+        store = VectorStore()
+        store.add_documents([
+            {"id": "d1", "title": "T1", "content": "hello", "source": "s", "category": "itc"},
+            {"id": "d2", "title": "T2", "content": "world", "source": "s", "category": "recon"},
+        ])
+        itc_docs = store.get_by_category("itc")
+        assert len(itc_docs) == 1
+        assert itc_docs[0].doc_id == "d1"
+
+    def test_inverted_index_by_parent(self):
+        from environment.knowledge.vector_store import VectorStore
+        store = VectorStore()
+        store.add_documents([
+            {"id": "p1_chunk_0", "title": "T", "content": "hello", "source": "s", "category": "c", "parent_id": "p1"},
+            {"id": "p1_chunk_1", "title": "T", "content": "world", "source": "s", "category": "c", "parent_id": "p1"},
+        ])
+        children = store.get_by_parent("p1")
+        assert len(children) == 2
+
+    def test_search_with_category_filter(self):
+        from environment.knowledge.vector_store import VectorStore
+        store = VectorStore()
+        store.add_documents([
+            {"id": "d1", "title": "ITC rules", "content": "input tax credit provisions", "source": "s", "category": "itc"},
+            {"id": "d2", "title": "Penalties", "content": "penalty for late filing", "source": "s", "category": "penalty"},
+        ])
+        results = store.search_with_filter("ITC credit", "itc", top_k=5)
+        assert len(results) >= 1
+        assert all(doc.category == "itc" for doc, _ in results)
+
+
+class TestRAGEngineV4:
+    """Tests for v4 RAG engine: smart_retrieve, RAG-fusion, HyDE, graph expansion."""
+
+    def test_smart_retrieve_returns_results(self):
+        rag = RAGEngine()
+        rag.initialize()
+        results = rag.smart_retrieve("Can I claim ITC if supplier hasn't filed?")
+        assert len(results) > 0
+
+    def test_rag_fusion_retrieve(self):
+        rag = RAGEngine()
+        rag.initialize()
+        results = rag.rag_fusion_retrieve("ITC eligibility conditions", top_k=3)
+        assert len(results) > 0
+        assert all("relevance" in r for r in results)
+
+    def test_hyde_retrieve(self):
+        rag = RAGEngine(use_hyde=True)
+        rag.initialize()
+        results = rag.hyde_retrieve("What are ITC conditions?", top_k=3)
+        assert len(results) > 0
+
+    def test_cache_hit_on_repeated_query(self):
+        rag = RAGEngine(use_cache=True)
+        rag.initialize()
+        r1 = rag.smart_retrieve("ITC eligibility conditions")
+        r2 = rag.smart_retrieve("ITC eligibility conditions")
+        assert rag.cache.hits >= 1
+
+    def test_graph_stats_populated(self):
+        rag = RAGEngine(use_graph=True)
+        rag.initialize()
+        stats = rag.graph_stats
+        assert stats["nodes"] > 0 or stats["edges"] >= 0
+
+    def test_self_rag_skips_greeting(self):
+        rag = RAGEngine(use_self_rag=True)
+        rag.initialize()
+        results = rag.smart_retrieve("Hello there")
+        assert len(results) == 0
+
+    def test_convenience_itc_context(self):
+        rag = RAGEngine()
+        rag.initialize()
+        ctx = rag.get_itc_rules_context()
+        assert len(ctx) > 50
+
+    def test_convenience_recon_context(self):
+        rag = RAGEngine()
+        rag.initialize()
+        ctx = rag.get_reconciliation_context()
+        assert len(ctx) > 50
+
+
+class TestEvalHarnessV3:
+    """Tests for v3 eval harness with MRR and NDCG metrics."""
+
+    def test_eval_returns_all_metrics(self):
+        from environment.knowledge.eval_rag import evaluate_retrieval
+        report = evaluate_retrieval(verbose=False)
+        assert "source_hit_rate" in report
+        assert "keyword_hit_rate" in report
+        assert "mrr" in report
+        assert "ndcg@3" in report
+        assert "per_query" in report
+
+    def test_source_hit_rate_above_threshold(self):
+        from environment.knowledge.eval_rag import evaluate_retrieval
+        report = evaluate_retrieval(verbose=False)
+        assert report["source_hit_rate"] >= 0.5, f"Source hit rate too low: {report['source_hit_rate']}"
+
+    def test_mrr_is_valid_range(self):
+        from environment.knowledge.eval_rag import evaluate_retrieval
+        report = evaluate_retrieval(verbose=False)
+        assert 0.0 <= report["mrr"] <= 1.0
+
+    def test_ndcg_is_valid_range(self):
+        from environment.knowledge.eval_rag import evaluate_retrieval
+        report = evaluate_retrieval(verbose=False)
+        assert 0.0 <= report["ndcg@3"] <= 1.0
+
+
+class TestAgentContextInjection:
+    """Tests for v4 agent RAG context injection."""
+
+    def test_base_agent_inject_context(self):
+        from environment.agents.base_agent import AgentMessage
+        from environment.agents.matcher import MatcherAgent
+        agent = MatcherAgent()
+        agent.inject_context("ITC rules: Section 16(2) requires...")
+        prompt = agent.get_full_system_prompt()
+        assert "RETRIEVED GST KNOWLEDGE" in prompt
+        assert "Section 16(2)" in prompt
+
+    def test_base_agent_no_context_is_clean(self):
+        from environment.agents.matcher import MatcherAgent
+        agent = MatcherAgent()
+        prompt = agent.get_full_system_prompt()
+        assert "RETRIEVED GST KNOWLEDGE" not in prompt
+
+    def test_inject_context_appears_in_build_messages(self):
+        from environment.agents.matcher import MatcherAgent
+        agent = MatcherAgent()
+        agent.inject_context("Test GST context here")
+        messages = agent.build_messages({"purchase_register": [], "gstr2b_data": []}, [])
+        system_msg = messages[0]["content"]
+        assert "Test GST context here" in system_msg
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

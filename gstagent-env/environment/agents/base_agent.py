@@ -44,6 +44,7 @@ class BaseAgent(ABC):
         self.model = model or MODEL_NAME
         self.message_history: list[dict] = []
         self.actions_taken: int = 0
+        self._rag_context: str = ""  # v4: Injected RAG knowledge
 
     @abstractmethod
     def get_system_prompt(self) -> str:
@@ -55,9 +56,37 @@ class BaseAgent(ABC):
     ) -> list[AgentMessage]:
         """Process an observation and return messages/actions."""
 
+    def inject_context(self, rag_context: str) -> None:
+        """
+        Inject RAG-retrieved GST knowledge into this agent (v4).
+
+        This is called by the orchestrator before each processing stage.
+        The context is included in the system prompt to ground the agent's
+        decisions in verified GST knowledge.
+        """
+        self._rag_context = rag_context
+
+    def get_full_system_prompt(self) -> str:
+        """
+        Get system prompt with injected RAG context (v4).
+
+        Combines the agent's base system prompt with any RAG knowledge
+        that was injected via inject_context().
+        """
+        base_prompt = self.get_system_prompt()
+        if self._rag_context:
+            return (
+                f"{base_prompt}\n\n"
+                f"--- RETRIEVED GST KNOWLEDGE (use this to ground your decisions) ---\n"
+                f"{self._rag_context}\n"
+                f"--- END RETRIEVED KNOWLEDGE ---\n"
+            )
+        return base_prompt
+
     def build_messages(self, observation: dict, context: list[AgentMessage]) -> list[dict]:
         """Build LLM message list from observation and context."""
-        messages = [{"role": "system", "content": self.get_system_prompt()}]
+        # v4: Use full system prompt (includes RAG context if injected)
+        messages = [{"role": "system", "content": self.get_full_system_prompt()}]
 
         # Add context from other agents
         for msg in context[-10:]:  # Last 10 messages to avoid overflow
