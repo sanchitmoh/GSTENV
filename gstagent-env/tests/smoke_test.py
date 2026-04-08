@@ -31,7 +31,7 @@ def test_health():
     """1. Health endpoint."""
     r = requests.get(f"{BASE}/health")
     assert r.status_code == 200
-    assert r.json()["status"] == "ok"
+    assert r.json()["status"] == "healthy"
 
 
 def test_reset_and_step():

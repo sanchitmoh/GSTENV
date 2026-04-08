@@ -228,17 +228,19 @@ async def add_request_id(request: Request, call_next):
 @app.get("/health")
 async def health():
     """Liveness probe — HuggingFace pings this to verify the Space is alive."""
-    return {"status": "ok", "sessions_active": len(sessions)}
+    return {"status": "healthy", "sessions_active": len(sessions)}
 
 
 @app.post("/reset")
 @limiter.limit(f"{RATE_LIMIT_REQUESTS}/minute")
-async def reset(body: ResetRequest, request: Request):
+async def reset(request: Request, body: ResetRequest | None = None):
     """
     Start a new episode. Creates a new session and returns observation with session_id.
+    Body is optional — if omitted, defaults to invoice_match task.
     """
+    task_id = body.task_id if body else "invoice_match"
     # Security Fix M4: wire up InputSanitizer
-    InputSanitizer.validate_task_id(body.task_id)
+    InputSanitizer.validate_task_id(task_id)
 
     loop = asyncio.get_event_loop()
     env = GSTAgentEnv()
@@ -246,7 +248,7 @@ async def reset(body: ResetRequest, request: Request):
     try:
         # Fix #19 + #20: async with timeout
         obs = await asyncio.wait_for(
-            loop.run_in_executor(None, env.reset, body.task_id),
+            loop.run_in_executor(None, env.reset, task_id),
             timeout=RESET_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
@@ -261,7 +263,7 @@ async def reset(body: ResetRequest, request: Request):
     logger.info(
         "episode_reset",
         session_id=session_id,
-        task_id=body.task_id,
+        task_id=task_id,
         invoice_count=len(env.purchase_register),
     )
 
@@ -365,4 +367,49 @@ async def replay(session_id: str):
         "steps": env.replay_log,
         "total_steps": len(env.replay_log),
         "done": env._done,
+    }
+
+
+# ── OpenEnv Runtime Contract Endpoints ─────────────────────────────
+
+
+@app.get("/metadata")
+async def metadata():
+    """OpenEnv metadata — returns environment name and description."""
+    return {
+        "name": "gstagent-env",
+        "description": "OpenEnv-compatible RL environment for Indian GST reconciliation",
+    }
+
+
+@app.get("/schema")
+async def env_schema():
+    """OpenEnv schema — returns action, observation, and state JSON schemas."""
+    return {
+        "action": GSTAction.model_json_schema(),
+        "observation": GSTObservation.model_json_schema(),
+        "state": GSTObservation.model_json_schema(),
+    }
+
+
+@app.get("/state")
+async def get_state_global():
+    """OpenEnv /state — returns current state (latest active session or empty)."""
+    if sessions:
+        latest = max(sessions.items(), key=lambda x: x[1]["created_at"])
+        env: GSTAgentEnv = latest[1]["env"]
+        return env.state().model_dump()
+    return {"status": "no_active_sessions"}
+
+
+@app.post("/mcp")
+async def mcp_endpoint():
+    """OpenEnv MCP — minimal JSON-RPC 2.0 handler."""
+    return {
+        "jsonrpc": "2.0",
+        "result": {
+            "name": "gstagent-env",
+            "version": "1.0.0",
+        },
+        "id": None,
     }
