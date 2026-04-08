@@ -73,7 +73,7 @@ class GSTReward(BaseModel):
 class ResetRequest(BaseModel):
     """Request body for POST /reset."""
 
-    task_id: str = Field(..., description="Task to load: invoice_match, itc_audit, full_recon")
+    task_id: str = Field("invoice_match", description="Task to load: invoice_match, itc_audit, full_recon")
 
 
 class StepRequest(BaseModel):
