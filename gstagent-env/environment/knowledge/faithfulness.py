@@ -33,6 +33,11 @@ def assert_grounded(response: str, context_chunks: list[dict]) -> bool:
     combined_context = " ".join(
         c.get("content", "").lower() for c in context_chunks
     )
+    # Strip contextual chunk headers: [Category: X | Source: Y] Title —
+    # These headers contain legal references that would falsely ground
+    # hallucinated citations (e.g., "Rule 36(4)" in header matches even
+    # when the actual chunk content doesn't support the claim).
+    combined_context = re.sub(r'\[category:[^\]]+\][^\n]*?\u2014\s*', '', combined_context)
     combined_context = re.sub(r"\s+", " ", combined_context)
 
     # Check legal references
@@ -105,6 +110,8 @@ def get_grounding_report(response: str, context_chunks: list[dict]) -> dict:
     combined_context = " ".join(
         c.get("content", "").lower() for c in context_chunks
     )
+    # Strip contextual chunk headers before checking grounding
+    combined_context = re.sub(r'\[category:[^\]]+\][^\n]*\u2014\s*', '', combined_context)
     combined_normalized = re.sub(r"\s+", " ", combined_context).replace(" ", "")
 
     legal_refs = extract_legal_references(response)

@@ -54,6 +54,38 @@ class ChunkConfig:
 # Default config — used when callers don't provide one
 DEFAULT_CONFIG = ChunkConfig()
 
+# ── Category-Aware Chunk Sizes ───────────────────────────────────
+# Every GST doc in the knowledge base is under 180 words.
+# chunk_size=300 means the guard `if total_words <= config.chunk_size`
+# fires for every single document, making the chunker dead code.
+# These category-aware sizes ensure 30+ of 40 docs split into 2-3 chunks,
+# activating hierarchical search, sentence-window, and parent_id tracking.
+
+CHUNK_SIZES: dict[str, int] = {
+    "legislation":      50,   # Dense single-clause legal text
+    "rules":            55,   # Rule clauses — self-contained facts
+    "itc_rules":        65,   # Circular paragraphs
+    "process":          90,   # Numbered steps — keep step groups
+    "practical":        70,   # Threshold tables
+    "business_impact":  100,  # Narrative
+    "e_invoicing":      70,   # Technical spec, dense
+    "returns":          80,   # Multi-part filing rules
+    "penalties":        60,   # Short legal clauses
+    "rcm":              70,   # RCM rules + service lists
+    "composition":      65,
+    "blocked_credits":  60,   # Enumerated list items
+    "exports":          70,
+    "registration":     65,
+    "tds_tcs":          60,
+    "place_of_supply":  70,
+    "audit":            80,
+    "technical":        60,
+    "logistics":        75,
+    "isd":              65,
+    "anti_profiteering": 60,
+    "classification":   70,
+}
+
 
 # ── Sentence Splitting ───────────────────────────────────────────────
 
@@ -138,8 +170,13 @@ def chunk_document(
         List of chunk dicts. Single-chunk documents returned as-is.
     """
     if config is None:
+        # Use category-aware chunk size if caller didn't specify one
+        effective_size = chunk_size
+        if chunk_size == 300:  # Default — use category-aware size instead
+            category = doc.get("category", "")
+            effective_size = CHUNK_SIZES.get(category, 70)
         config = ChunkConfig(
-            chunk_size=chunk_size,
+            chunk_size=effective_size,
             overlap_pct=0.0 if overlap_sentences == 0 else 0.15,
             context_header=True,
         )

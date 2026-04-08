@@ -54,7 +54,7 @@ from environment.knowledge.query_router import (
     SemanticCache,
     SelfRAGController,
 )
-from environment.knowledge.vector_store import VectorStore
+from environment.knowledge.vector_store import VectorStore, SemanticVectorStore
 
 logger = structlog.get_logger()
 
@@ -117,8 +117,14 @@ class RAGEngine:
         use_hyde: bool = False,          # Off by default — experimental
         use_graph: bool = True,
         use_self_rag: bool = True,
+        use_cross_encoder: bool = False,
+        use_semantic: bool = False,      # Use SemanticVectorStore if sentence-transformers available
     ):
-        self.store = VectorStore()
+        # Try semantic store if requested, fall back to TF-IDF
+        if use_semantic:
+            self.store = SemanticVectorStore()
+        else:
+            self.store = VectorStore()
         self.query_processor = QueryProcessor()
         self.min_score = min_score
         self.use_hybrid = use_hybrid
@@ -132,6 +138,11 @@ class RAGEngine:
             mode="sentence",
         )
 
+        # v4: Expose cross-encoder flag
+        if use_cross_encoder:
+            from environment.knowledge.vector_store import Reranker
+            self.store.reranker = Reranker(use_cross_encoder=True)
+
         # v4: New components
         self.router = QueryRouter()
         self.cache = SemanticCache(max_size=64) if use_cache else None
@@ -140,6 +151,7 @@ class RAGEngine:
         self.knowledge_graph = KnowledgeGraph() if use_graph else None
         self.self_rag = SelfRAGController() if use_self_rag else None
         self.use_routing = use_routing
+        self._use_semantic = use_semantic
 
         self._initialized = False
 
@@ -154,19 +166,37 @@ class RAGEngine:
         if self.knowledge_graph is not None:
             self.knowledge_graph.build_from_documents(raw_docs)
 
-        # Chunk documents using ChunkConfig
+        # Standard store: sentence mode (for hierarchical + standard retrieval)
         chunked_docs = chunk_all_documents(
             raw_docs,
             config=self.chunk_config,
         )
-
         self.store.add_documents(chunked_docs)
+
+        # Sentence-window store: one chunk per sentence (separate index)
+        # Fix: RAGEngine was using mode="sentence" for everything, so
+        # _sentence_window_chunks() was never called. Now we create a
+        # dedicated store with mode="sentence_window".
+        sw_config = ChunkConfig(
+            mode="sentence_window",
+            context_header=True,
+            window_expand=5,
+            chunk_size=self.chunk_config.chunk_size,
+        )
+        sw_docs = chunk_all_documents(raw_docs, config=sw_config)
+        if self._use_semantic:
+            self.sw_store = SemanticVectorStore()
+        else:
+            self.sw_store = VectorStore()
+        self.sw_store.add_documents(sw_docs)
+
         self._initialized = True
 
         logger.info(
             "rag_v4_initialized",
             raw_documents=len(raw_docs),
             indexed_chunks=self.store.count,
+            sw_chunks=self.sw_store.count,
             chunk_mode=self.chunk_config.mode,
             context_headers=self.chunk_config.context_header,
             reranking=self.use_reranking,
@@ -262,6 +292,13 @@ class RAGEngine:
         if not self.knowledge_graph:
             return results
 
+        # Fix: GraphRAG neighbor score decay (0.7x) drops below SelfRAG
+        # threshold (0.15), causing all graph neighbors to be silently filtered.
+        # Use absolute minimum to keep neighbors above the filter.
+        self_rag_threshold = 0.15
+        if self.self_rag:
+            self_rag_threshold = self.self_rag.RELEVANCE_THRESHOLD
+
         existing_ids = {r.get("doc_id", "").split("_chunk_")[0] for r in results}
         extra: list[dict] = []
 
@@ -283,12 +320,15 @@ class RAGEngine:
                         doc = chunks[0]
 
                 if doc:
+                    # Use decayed score but enforce minimum above SelfRAG threshold
+                    decayed_score = round(r.get("relevance", 0) * 0.7, 4)
+                    neighbor_score = max(decayed_score, self_rag_threshold + 0.02)
                     extra.append({
                         "title": doc.title,
                         "content": doc.content,
                         "source": doc.source,
                         "category": doc.category,
-                        "relevance": round(r.get("relevance", 0) * 0.7, 4),  # Decay score
+                        "relevance": neighbor_score,
                         "doc_id": doc.doc_id,
                         "retrieval_mode": "graph_expansion",
                     })
@@ -476,6 +516,10 @@ class RAGEngine:
             expanded_query, top_k=top_k, min_score=threshold,
         )
 
+        # Pattern to detect contextual headers: [Category: X | Source: Y] Title —
+        import re
+        header_pattern = re.compile(r'^\[Category:[^\]]+\][^\n]*\u2014\s*')
+
         output = []
         for doc, score in results:
             parent_id = doc.parent_id if doc.parent_id else doc.doc_id
@@ -483,7 +527,15 @@ class RAGEngine:
 
             if len(siblings) > 1:
                 siblings.sort(key=lambda d: d.chunk_index)
-                combined_content = " ".join(s.content for s in siblings)
+                # Fix: strip duplicate contextual headers from all but first sibling
+                # to avoid burning tokens and confusing the LLM about source count
+                contents = []
+                for i, sibling in enumerate(siblings):
+                    c = sibling.content
+                    if i > 0:
+                        c = header_pattern.sub('', c).strip()
+                    contents.append(c)
+                combined_content = " ".join(contents)
             else:
                 combined_content = doc.content
 
@@ -515,12 +567,15 @@ class RAGEngine:
         threshold = min_score if min_score is not None else self.min_score
         expanded_query = self.query_processor.process(query)
 
+        # Fix: Use dedicated sentence-window store (sw_store) which was
+        # chunked with mode="sentence_window", so documents actually have
+        # sentence_index >= 0 and sentences[] populated.
         if self.use_reranking:
-            results = self.store.reranked_search(
+            results = self.sw_store.reranked_search(
                 expanded_query, top_k=top_k * 2, min_score=0,
             )
         else:
-            results = self.store.hybrid_search(
+            results = self.sw_store.hybrid_search(
                 expanded_query, top_k=top_k * 2, min_score=0,
             )
 

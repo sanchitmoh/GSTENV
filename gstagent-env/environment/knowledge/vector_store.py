@@ -22,7 +22,6 @@ Retained from v3:
 
 from __future__ import annotations
 
-import functools
 import math
 import re
 from collections import Counter, defaultdict
@@ -305,8 +304,8 @@ class VectorStore:
         for doc, tokens in zip(self.documents, self._doc_tokens):
             doc.vector = self._compute_tfidf(tokens)
 
-        # Clear the LRU cache since vocabulary changed
-        self._cached_query_tfidf.cache_clear()
+        # Clear the per-instance query cache since vocabulary changed
+        self._query_cache: dict[str, tuple] = {}
 
         self._built = True
 
@@ -328,11 +327,12 @@ class VectorStore:
 
         return vector
 
-    @functools.lru_cache(maxsize=256)
     def _cached_query_tfidf(self, query: str) -> tuple:
-        """LRU-cached query TF-IDF vector computation (v4)."""
-        tokens = self._tokenize(query)
-        return tuple(self._compute_tfidf(tokens))
+        """Per-instance cached query TF-IDF vector computation (v4 fix: no lru_cache memory leak)."""
+        if query not in self._query_cache:
+            tokens = self._tokenize(query)
+            self._query_cache[query] = tuple(self._compute_tfidf(tokens))
+        return self._query_cache[query]
 
     def _cosine_similarity(self, v1: list[float], v2: list[float]) -> float:
         """Compute cosine similarity between two vectors."""
@@ -528,3 +528,95 @@ class VectorStore:
     @property
     def count(self) -> int:
         return len(self.documents)
+
+
+# ── SemanticVectorStore (optional — requires sentence-transformers) ──
+
+class SemanticVectorStore(VectorStore):
+    """
+    Drop-in replacement for VectorStore using semantic embeddings.
+
+    Inherits: BM25, reranker, inverted indices, all search methods.
+    Overrides: similarity computation from TF-IDF cosine to semantic cosine.
+
+    Falls back to TF-IDF if sentence-transformers is not installed.
+    """
+
+    def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5"):
+        super().__init__()
+        self._model_name = model_name
+        self._model = None
+        self._sem_embeddings = None
+        self._semantic_available = False
+        try:
+            from sentence_transformers import SentenceTransformer
+            self._model = SentenceTransformer(model_name)
+            self._semantic_available = True
+        except (ImportError, Exception):
+            pass  # Fall back to TF-IDF
+
+    def add_documents(self, docs: list[dict]) -> None:
+        """Add documents and build both TF-IDF and semantic indices."""
+        super().add_documents(docs)
+        if self._semantic_available and self._model is not None:
+            import numpy as np
+            texts = [f"{d.title}. {d.content}" for d in self.documents]
+            self._sem_embeddings = self._model.encode(
+                texts, normalize_embeddings=True, batch_size=32
+            )
+
+    def hybrid_search(
+        self,
+        query: str,
+        top_k: int = 5,
+        min_score: float = 0.0,
+        rrf_k: int = 60,
+    ) -> list[tuple[Document, float]]:
+        """Hybrid search: semantic dense + BM25 keyword, fused via RRF."""
+        if not self._semantic_available or self._sem_embeddings is None:
+            return super().hybrid_search(query, top_k, min_score, rrf_k)
+
+        if not self._built:
+            return []
+
+        import numpy as np
+
+        # Stage 1: semantic dense retrieval
+        q_emb = self._model.encode([query], normalize_embeddings=True)[0]
+        sem_scores = self._sem_embeddings @ q_emb
+        sem_ranked = [(i, float(s)) for i, s in enumerate(sem_scores)]
+        sem_ranked.sort(key=lambda x: x[1], reverse=True)
+        fetch_k = top_k * 3
+        sem_ranked = sem_ranked[:fetch_k]
+
+        # Stage 2: BM25 keyword retrieval (inherited)
+        query_tokens = self._tokenize(query)
+        bm25_scored = []
+        for i in range(len(self.documents)):
+            score = self._bm25_score(query_tokens, i)
+            if score > 0:
+                bm25_scored.append((i, score))
+        bm25_scored.sort(key=lambda x: x[1], reverse=True)
+        bm25_ranked = bm25_scored[:fetch_k]
+
+        # Stage 3: Reciprocal Rank Fusion
+        rrf_scores: dict[int, float] = {}
+        for rank, (doc_idx, _) in enumerate(sem_ranked):
+            rrf_scores[doc_idx] = rrf_scores.get(doc_idx, 0) + 1.0 / (rrf_k + rank)
+        for rank, (doc_idx, _) in enumerate(bm25_ranked):
+            rrf_scores[doc_idx] = rrf_scores.get(doc_idx, 0) + 1.0 / (rrf_k + rank)
+
+        # Normalize to [0, 1]
+        max_possible = 2.0 / rrf_k
+        normalized = {
+            idx: score / max_possible for idx, score in rrf_scores.items()
+        }
+
+        fused = sorted(normalized.items(), key=lambda x: x[1], reverse=True)
+
+        results = []
+        for doc_idx, score in fused[:top_k]:
+            if score >= min_score:
+                results.append((self.documents[doc_idx], round(score, 6)))
+
+        return results

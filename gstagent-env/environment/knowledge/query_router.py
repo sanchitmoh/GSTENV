@@ -179,16 +179,20 @@ class SemanticCache:
         self.hits: int = 0
         self.misses: int = 0
 
-    def _fingerprint(self, query: str) -> str:
-        """Normalize query to a cache key: lowercase, remove stops, sort tokens."""
+    def _fingerprint(self, query: str, strategy: str = "standard") -> str:
+        """Normalize query to a cache key: lowercase, remove stops, sort tokens.
+
+        v4 fix: include retrieval strategy in key to prevent cross-strategy
+        cache collisions (e.g., RAG-Fusion result returned for sentence-window request).
+        """
         tokens = re.findall(r"[a-z0-9]+", query.lower())
         # Keep negation tokens (critical for meaning), remove other stops
         meaningful = [t for t in tokens if t not in _CACHE_STOPS or t in {"not", "no", "without", "never"}]
-        return " ".join(sorted(set(meaningful)))
+        return strategy + ":" + " ".join(sorted(set(meaningful)))
 
-    def get(self, query: str) -> list[dict] | None:
+    def get(self, query: str, strategy: str = "standard") -> list[dict] | None:
         """Look up cached results. Returns None on miss."""
-        key = self._fingerprint(query)
+        key = self._fingerprint(query, strategy)
         if key in self._cache:
             self.hits += 1
             # Move to end (most recently used)
@@ -197,9 +201,9 @@ class SemanticCache:
         self.misses += 1
         return None
 
-    def put(self, query: str, results: list[dict]) -> None:
+    def put(self, query: str, results: list[dict], strategy: str = "standard") -> None:
         """Store results in cache."""
-        key = self._fingerprint(query)
+        key = self._fingerprint(query, strategy)
         self._cache[key] = results
         self._cache.move_to_end(key)
         # Evict oldest if over capacity
@@ -239,11 +243,13 @@ class RAGFusion:
     Fusing these gives better recall than any single reformulation.
     """
 
-    # Template-based query variant generators (no LLM needed)
+    # Question-type reformulation templates for semantic diversity
+    # (v4 fix: old templates produced near-identical keyword soup)
     VARIANT_TEMPLATES: list[str] = [
         "{topic} GST rules provisions",
-        "{topic} CBIC circular notification",
+        "rule governing {topic}",
         "{topic} eligibility conditions requirements",
+        "CBIC clarification {topic}",
         "{topic} compliance procedure process",
     ]
 
