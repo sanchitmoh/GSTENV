@@ -1,4 +1,0 @@
-# file: C:\HACKTHAON\gstagent-env\environment\knowledge\vector_store.py
-# hypothesis_version: 6.151.10
-
-[0.0, 0.001, 0.5, 0.75, 1.0, 1.5, '[a-z0-9]+', 'category', 'chunk_index', 'content', 'id', 'parent_id', 'source', 'title']

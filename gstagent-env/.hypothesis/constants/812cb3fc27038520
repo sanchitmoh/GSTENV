@@ -1,4 +1,0 @@
-# file: C:\HACKTHAON\gstagent-env\environment\config.py
-# hypothesis_version: 6.151.10
-
-['*', '...', '0.0.0.0', '0.7', '0.75', '0.8', '100', '1048576', '1140', '1800', '30', '42', '50', '60', '7860', 'ALLOWED_ORIGINS', 'API_BASE_URL', 'API_HOST', 'API_PORT', 'DATA_SEED', 'FAST_MODEL_NAME', 'GOOGLE_API_KEY', 'GST_API_KEY', 'HF_TOKEN', 'LEADERBOARD_DB_PATH', 'MODEL_NAME', 'OPENAI_API_KEY', 'RATE_LIMIT_REQUESTS', 'RATE_LIMIT_WINDOW', 'SESSION_TTL_SECONDS', 'STEP_TIMEOUT_SECONDS', 'config_validation', 'gpt-3.5-turbo', 'gpt-4']

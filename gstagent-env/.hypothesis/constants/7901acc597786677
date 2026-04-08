@@ -1,4 +1,0 @@
-# file: C:\HACKTHAON\gstagent-env\environment\agents\validator.py
-# hypothesis_version: 6.151.10
-
-[0.0, 1.1, 'Reporter', 'Validator', 'action_type', 'cgst', 'decisions', 'discrepancies', 'igst', 'invoice_id', 'matches', 'payload', 'purchase_register', 'sgst', 'submit_report', 'total_itc']

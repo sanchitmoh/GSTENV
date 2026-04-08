@@ -1,4 +1,0 @@
-# file: C:\HACKTHAON\gstagent-env\environment\auth.py
-# hypothesis_version: 6.151.10
-
-[100, 200, 400, 401, 403, 500, '...', 'GST_API_KEY', 'Invalid API key.', 'X-API-Key', 'action_type', 'auth_failed', 'compute_itc', 'flag_mismatch', 'full_recon', 'invoice_id', 'invoice_match', 'itc_audit', 'match_invoice', 'payload', 'reason', 'submit_report']
