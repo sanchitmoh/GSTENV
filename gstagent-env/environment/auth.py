@@ -138,6 +138,9 @@ class InputSanitizer:
         return session_id
 
 
+# NOTE: Primary rate limiting for HTTP endpoints is handled by slowapi in server.py.
+# This class is retained for lightweight, non-middleware rate limiting
+# (e.g., per-service internal throttling) and is tested in test_security.py.
 class RateLimitTracker:
     """
     In-memory rate limiter per IP with memory safety (H3 fix).

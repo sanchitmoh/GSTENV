@@ -20,6 +20,7 @@ WORKDIR /app
 COPY openenv.yaml .
 COPY environment/ ./environment/
 COPY inference.py .
+COPY inference_advanced.py .
 COPY README.md .
 
 # Initialize empty leaderboard (M5: don't copy stale test data)

@@ -13,7 +13,7 @@ from __future__ import annotations
 import sqlite3
 import time
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import structlog
@@ -92,7 +92,7 @@ class LeaderboardDB:
     ) -> int:
         """Add a leaderboard entry. Returns the entry ID."""
         bd = breakdown or {}
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(UTC).isoformat()
 
         with self._connect() as conn:
             cursor = conn.execute(

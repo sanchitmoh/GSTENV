@@ -22,7 +22,7 @@ import json
 import time
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import structlog
@@ -305,7 +305,7 @@ async def step(body: StepRequest, request: Request):
             "task_id": env.task_id,
             "score": reward,
             "steps": env._step_number,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         })
         _save_leaderboard(entries)
 

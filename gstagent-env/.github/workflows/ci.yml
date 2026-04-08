@@ -36,6 +36,9 @@ jobs:
       - name: Unit & property tests
         run: pytest tests/ -v --tb=short
 
+      - name: Validate advanced inference imports
+        run: python -c "import inference_advanced; print('✅ inference_advanced.py imports OK')"
+
       - name: Validate OpenEnv
         run: openenv validate .
         continue-on-error: true

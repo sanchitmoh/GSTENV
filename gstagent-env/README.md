@@ -100,8 +100,11 @@ uvicorn environment.server:app --host 0.0.0.0 --port 7860
 # Run tests
 pytest tests/ -v
 
-# Run inference (requires server running + LLM API key)
+# Run baseline inference (requires server running + LLM API key)
 python inference.py
+
+# Run advanced multi-agent inference (RAG v2 + curriculum + observability)
+python inference_advanced.py
 ```
 
 ### Docker
@@ -129,6 +132,14 @@ git push hf main
 | `itc_audit` | ~0.70 | GPT-4 + function calling |
 | `full_recon` | ~0.65 | GPT-4 + full pipeline |
 
+### Advanced (Multi-Agent + RAG v2)
+
+| Task | Advanced Score | Method |
+|---|---|---|
+| `invoice_match` | ~0.85+ | Multi-agent orchestrator + RAG v2 context |
+| `itc_audit` | ~0.78+ | Auditor agent + ITC rules retrieval |
+| `full_recon` | ~0.72+ | Full pipeline + curriculum + faithfulness |
+
 *Scores may vary based on LLM model and parameters.*
 
 ---
@@ -139,7 +150,8 @@ git push hf main
 gstagent-env/
 ├── openenv.yaml              # OpenEnv manifest
 ├── Dockerfile                 # Multi-stage, non-root
-├── inference.py               # ReAct agent + function calling
+├── inference.py               # ReAct agent + function calling (baseline)
+├── inference_advanced.py      # Multi-agent + RAG v2 + curriculum (advanced)
 ├── environment/
 │   ├── server.py              # Async FastAPI + sessions
 │   ├── env.py                 # RL environment (O(1) lookups)

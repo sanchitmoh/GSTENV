@@ -10,6 +10,11 @@ Features:
 
 Must be at project root (not inside subfolder) — judges check this path.
 Must complete in under 20 minutes on a normal laptop.
+
+STDOUT FORMAT (MANDATORY):
+  [START] task=<task_name> env=<benchmark> model=<model_name>
+  [STEP]  step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
+  [END]   success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>
 """
 
 from __future__ import annotations
@@ -19,6 +24,7 @@ import os
 import signal
 import sys
 import time
+from typing import List, Optional
 
 import requests
 from dotenv import load_dotenv
@@ -36,6 +42,10 @@ from environment.config import (
     RESET_TIMEOUT_SECONDS,
     STEP_TIMEOUT_SECONDS,
 )
+
+# HF_TOKEN / API_KEY fallback (mandatory per submission spec)
+API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY") or OPENAI_API_KEY
+BENCHMARK = "gstagent-env"
 
 # Fix #25: Timeout guard
 TIMEOUT_SECONDS = INFERENCE_TIMEOUT_SECONDS
@@ -59,6 +69,30 @@ def check_timeout():
     if time.time() - START_TIME > TIMEOUT_SECONDS:
         print("\n⏰ TIMEOUT: 19 minutes exceeded. Exiting.")
         sys.exit(1)
+
+
+# ── Mandatory STDOUT Logging (OpenEnv submission format) ─────────────
+
+
+def log_start(task: str, env: str, model: str) -> None:
+    """Emit [START] line at episode begin."""
+    print(f"[START] task={task} env={env} model={model}", flush=True)
+
+
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+    """Emit [STEP] line per step, immediately after env.step() returns."""
+    error_val = error if error else "null"
+    done_val = str(done).lower()
+    print(
+        f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}",
+        flush=True,
+    )
+
+
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+    """Emit [END] line after episode, always emitted (even on exception)."""
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
 
 
 # ── OpenAI Function Calling Schemas (Fix #34) ────────────────────────
@@ -180,7 +214,7 @@ def api_step(session_id: str, action: dict) -> dict:
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def call_llm(messages: list[dict]) -> dict:
     """Call LLM with tools and retry (Fix #24)."""
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    client = OpenAI(api_key=API_KEY)
     response = client.chat.completions.create(
         model=MODEL_NAME,
         messages=messages,
@@ -219,11 +253,17 @@ Be methodical. Process invoices one by one. Do NOT invent invoice IDs that don't
 """
 
 
-def run_task(task_id: str) -> float:
-    """Run a single task with ReAct agent loop."""
+def run_task(task_id: str) -> tuple[float, int, list[float]]:
+    """Run a single task with ReAct agent loop.
+
+    Returns: (score, steps_taken, rewards_list)
+    """
     print(f"\n{'='*60}")
     print(f"Task: {task_id}")
     print(f"{'='*60}")
+
+    rewards: list[float] = []
+    steps_taken = 0
 
     # Reset environment
     obs_data = api_reset(task_id)
@@ -235,6 +275,9 @@ def run_task(task_id: str) -> float:
 
     print(f"Session: {session_id[:8]}...")
     print(f"Invoices: {len(invoices)} | GSTR-2B: {len(gstr2b)} | Max steps: {max_steps}")
+
+    # Emit [START]
+    log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 
     # Build context for LLM
     invoice_summary = json.dumps(
@@ -284,6 +327,14 @@ def run_task(task_id: str) -> float:
                 reward = result.get("reward", 0)
                 done = result.get("done", False)
                 info = result.get("info", {})
+                error = info.get("error", None)
+
+                steps_taken = step_num + 1
+                rewards.append(reward)
+
+                # Emit [STEP]
+                action_str = f"{fn_name}({json.dumps(fn_args)[:60]})"
+                log_step(step=steps_taken, action=action_str, reward=reward, done=done, error=error)
 
                 # Feed result back to LLM
                 messages.append(choice.message)
@@ -300,8 +351,9 @@ def run_task(task_id: str) -> float:
 
                 if done:
                     score = info.get("score", reward)
+                    score = min(max(score, 0.0), 1.0)  # clamp to [0, 1]
                     print(f"  ✅ Done! Score: {score}")
-                    return score
+                    return score, steps_taken, rewards
         else:
             # LLM responded with text (thinking) — add and continue
             messages.append({"role": "assistant", "content": choice.message.content or ""})
@@ -315,9 +367,14 @@ def run_task(task_id: str) -> float:
         "payload": {"total_itc": 0.0, "discrepancies": []},
     }
     result = api_step(session_id, action)
-    score = result.get("info", {}).get("score", result.get("reward", 0))
+    reward = result.get("reward", 0)
+    score = result.get("info", {}).get("score", reward)
+    score = min(max(score, 0.0), 1.0)  # clamp to [0, 1]
+    steps_taken += 1
+    rewards.append(reward)
+    log_step(step=steps_taken, action="submit_report({})", reward=reward, done=True, error=None)
     print(f"  Score: {score}")
-    return score
+    return score, steps_taken, rewards
 
 
 # ── Main ─────────────────────────────────────────────────────────────
@@ -329,16 +386,28 @@ def main():
     print(f"Model: {MODEL_NAME}")
     print()
 
-    if not OPENAI_API_KEY:
-        print("⚠️ Warning: OPENAI_API_KEY not set. LLM calls will fail.")
+    if not API_KEY:
+        print("⚠️ Warning: No API key set (HF_TOKEN / API_KEY / OPENAI_API_KEY). LLM calls will fail.")
 
     scores = {}
     for task_id in ["invoice_match", "itc_audit", "full_recon"]:
+        task_rewards: list[float] = []
+        task_steps = 0
+        task_score = 0.0
+        task_success = False
+
         try:
-            scores[task_id] = run_task(task_id)
+            task_score, task_steps, task_rewards = run_task(task_id)
+            task_score = min(max(task_score, 0.0), 1.0)  # clamp to [0, 1]
+            task_success = task_score > 0.0
         except Exception as e:
             print(f"  ❌ Error: {e}")
-            scores[task_id] = 0.0
+            task_score = 0.0
+        finally:
+            # [END] always emitted, even on exception
+            log_end(success=task_success, steps=task_steps, score=task_score, rewards=task_rewards)
+
+        scores[task_id] = task_score
 
     # Print final results
     print(f"\n{'='*60}")
