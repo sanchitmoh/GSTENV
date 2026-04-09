@@ -1,3 +1,14 @@
+---
+title: GST Agent Environment
+emoji: 🧾
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+license: apache-2.0
+app_port: 7860
+---
+
 # GST Agent Environment
 
 > **OpenEnv-compatible RL environment** simulating Indian GST reconciliation for MSMEs.

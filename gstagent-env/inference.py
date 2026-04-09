@@ -26,22 +26,55 @@ import sys
 import time
 from typing import List, Optional
 
-import requests
-from dotenv import load_dotenv
-from openai import OpenAI
-from tenacity import retry, stop_after_attempt, wait_exponential
+# ── Structured-output safety: if ANY import fails, still emit valid blocks ──
+def _emit_fallback_output(error_msg: str) -> None:
+    """Print minimal [START]/[STEP]/[END] blocks so the validator never sees empty stdout."""
+    TASKS = ["invoice_match", "itc_audit", "full_recon"]
+    for task in TASKS:
+        print(f"[START] task={task} env=gstagent-env model=unknown", flush=True)
+        print(f"[STEP] step=1 action=import_error reward=0.00 done=true error={error_msg}", flush=True)
+        print(f"[END] success=false steps=1 score=0.000 rewards=0.00", flush=True)
+
+
+try:
+    import requests
+except ImportError as _e:
+    _emit_fallback_output(f"ImportError:requests:{_e}")
+    sys.exit(1)
+
+try:
+    from dotenv import load_dotenv
+except ImportError as _e:
+    _emit_fallback_output(f"ImportError:dotenv:{_e}")
+    sys.exit(1)
+
+try:
+    from openai import OpenAI
+except ImportError as _e:
+    _emit_fallback_output(f"ImportError:openai:{_e}")
+    sys.exit(1)
+
+try:
+    from tenacity import retry, stop_after_attempt, wait_exponential
+except ImportError as _e:
+    _emit_fallback_output(f"ImportError:tenacity:{_e}")
+    sys.exit(1)
 
 # Load environment variables
 load_dotenv()
 
-from environment.config import (
-    API_BASE_URL,
-    INFERENCE_TIMEOUT_SECONDS,
-    MODEL_NAME,
-    OPENAI_API_KEY,
-    RESET_TIMEOUT_SECONDS,
-    STEP_TIMEOUT_SECONDS,
-)
+try:
+    from environment.config import (
+        API_BASE_URL,
+        INFERENCE_TIMEOUT_SECONDS,
+        MODEL_NAME,
+        OPENAI_API_KEY,
+        RESET_TIMEOUT_SECONDS,
+        STEP_TIMEOUT_SECONDS,
+    )
+except ImportError as _e:
+    _emit_fallback_output(f"ImportError:environment.config:{_e}")
+    sys.exit(1)
 
 # HF_TOKEN / API_KEY fallback (mandatory per submission spec)
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY") or OPENAI_API_KEY
@@ -265,12 +298,16 @@ def run_task(task_id: str) -> tuple[float, int, list[float]]:
     rewards: list[float] = []
     steps_taken = 0
 
+    # Emit [START] BEFORE any network call so validators always see it
+    log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
+
     # Reset environment
     try:
         obs_data = api_reset(task_id)
     except Exception as e:
         print(f"  ❌ Reset failed: {e}")
-        return 0.0, 0, []
+        log_step(step=1, action="reset", reward=0.0, done=True, error=str(e))
+        return 0.0, 1, [0.0]
     session_id = obs_data.get("session_id", "")
 
     invoices = obs_data.get("purchase_register", [])
@@ -279,9 +316,6 @@ def run_task(task_id: str) -> tuple[float, int, list[float]]:
 
     print(f"Session: {session_id[:8]}...")
     print(f"Invoices: {len(invoices)} | GSTR-2B: {len(gstr2b)} | Max steps: {max_steps}")
-
-    # Emit [START]
-    log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 
     # Build context for LLM
     invoice_summary = json.dumps(
