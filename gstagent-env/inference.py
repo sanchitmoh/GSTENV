@@ -486,8 +486,9 @@ def run_task(task_id: str) -> tuple[float, int, list[float]]:
 def main():
     """Run all 3 tasks and print scores."""
     print("🏁 GST Agent Environment — Baseline Inference")
-    print(f"API: {API_BASE_URL}")
-    print(f"Model: {MODEL_NAME}")
+    print(f"LLM proxy : {LLM_BASE_URL or '(none — using default OpenAI endpoint)'}")
+    print(f"Env server: {GST_ENV_URL}")
+    print(f"Model     : {MODEL_NAME}")
     print()
 
     if not API_KEY:
