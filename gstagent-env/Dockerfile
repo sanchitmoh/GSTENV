@@ -20,7 +20,7 @@ WORKDIR /app
 COPY openenv.yaml .
 COPY environment/ ./environment/
 COPY inference.py .
-COPY inference_advanced.py .
+# inference_advanced.py intentionally excluded: judge uses inference.py only
 COPY README.md .
 
 # Initialize empty leaderboard (M5: don't copy stale test data)
