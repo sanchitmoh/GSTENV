@@ -26,14 +26,24 @@ import sys
 import time
 from typing import List, Optional
 
+# Score must be strictly in (0, 1) — 0.0 and 1.0 are rejected by the validator
+_SCORE_MIN: float = 1e-4   # 0.0001 — minimum valid score
+_SCORE_MAX: float = 0.9999  # maximum valid score
+
+
+def _clamp_score(score: float) -> float:
+    """Clamp score to strictly open interval (0, 1) as required by validator."""
+    return max(_SCORE_MIN, min(_SCORE_MAX, float(score)))
+
+
 # ── Structured-output safety: if ANY import fails, still emit valid blocks ──
 def _emit_fallback_output(error_msg: str) -> None:
     """Print minimal [START]/[STEP]/[END] blocks so the validator never sees empty stdout."""
     TASKS = ["invoice_match", "itc_audit", "full_recon"]
     for task in TASKS:
         print(f"[START] task={task} env=gstagent-env model=unknown", flush=True)
-        print(f"[STEP] step=1 action=import_error reward=0.00 done=true error={error_msg}", flush=True)
-        print(f"[END] success=false steps=1 score=0.000 rewards=0.00", flush=True)
+        print(f"[STEP] step=1 action=import_error reward={_SCORE_MIN:.4f} done=true error={error_msg}", flush=True)
+        print(f"[END] success=false steps=1 score={_SCORE_MIN:.4f} rewards={_SCORE_MIN:.4f}", flush=True)
 
 
 try:
@@ -333,8 +343,8 @@ def run_task(task_id: str) -> tuple[float, int, list[float]]:
         obs_data = api_reset(task_id)
     except Exception as e:
         print(f"  ❌ Reset failed: {e}")
-        log_step(step=1, action="reset", reward=0.0, done=True, error=str(e))
-        return 0.0, 1, [0.0]
+        log_step(step=1, action="reset", reward=_SCORE_MIN, done=True, error=str(e))
+        return _SCORE_MIN, 1, [_SCORE_MIN]
     session_id = obs_data.get("session_id", "")
 
     invoices = obs_data.get("purchase_register", [])
@@ -450,7 +460,7 @@ def run_task(task_id: str) -> tuple[float, int, list[float]]:
 
                 if done:
                     score = info.get("score", reward)
-                    score = min(max(score, 0.0), 1.0)  # clamp to [0, 1]
+                    score = _clamp_score(score)  # strictly (0, 1)
                     print(f"  ✅ Done! Score: {score}")
                     return score, steps_taken, rewards
         else:
@@ -470,10 +480,10 @@ def run_task(task_id: str) -> tuple[float, int, list[float]]:
         result = api_step(session_id, action)
     except Exception as e:
         print(f"  ❌ Final submit failed: {e}")
-        return 0.0, steps_taken, rewards
+        return _SCORE_MIN, steps_taken, rewards
     reward = result.get("reward", 0)
     score = result.get("info", {}).get("score", reward)
-    score = min(max(score, 0.0), 1.0)  # clamp to [0, 1]
+    score = _clamp_score(score)  # strictly (0, 1)
     steps_taken += 1
     rewards.append(reward)
     log_step(step=steps_taken, action="submit_report({})", reward=reward, done=True, error=None)
@@ -498,16 +508,16 @@ def main():
     for task_id in ["invoice_match", "itc_audit", "full_recon"]:
         task_rewards: list[float] = []
         task_steps = 0
-        task_score = 0.0
+        task_score = _SCORE_MIN  # never 0.0 — validator rejects exact 0
         task_success = False
 
         try:
             task_score, task_steps, task_rewards = run_task(task_id)
-            task_score = min(max(task_score, 0.0), 1.0)  # clamp to [0, 1]
-            task_success = task_score > 0.0
+            task_score = _clamp_score(task_score)  # strictly (0, 1)
+            task_success = task_score > _SCORE_MIN
         except Exception as e:
             print(f"  ❌ Error: {e}")
-            task_score = 0.0
+            task_score = _SCORE_MIN  # never 0.0 — validator rejects exact 0
         finally:
             # [END] always emitted, even on exception
             log_end(success=task_success, steps=task_steps, score=task_score, rewards=task_rewards)
