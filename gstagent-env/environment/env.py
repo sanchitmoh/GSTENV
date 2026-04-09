@@ -143,12 +143,16 @@ class GSTAgentEnv:
                 {"error": "Episode already finished. Call reset() first."},
             )
 
-        # Fix #11: enforce max_steps
-        if self._step_number >= self._max_steps:
-            self._done = True
-            obs = self._build_observation()
-            self._cached_obs = obs
-            return (obs, 0.0, True, {"error": "Maximum steps exceeded."})
+        # Fix #11 (v2): max_steps is a soft budget for exploration actions.
+        # Hitting it does NOT terminate the episode — it blocks exploration but
+        # keeps the episode alive so the agent can still call submit_report.
+        # Only submit_report marks done=True (see _handle_submit).
+        if self._step_number >= self._max_steps and action.action_type != "submit_report":
+            obs = self._cached_obs or self._build_observation()
+            return (
+                obs, 0.0, False,
+                {"error": "Step budget exhausted. Call submit_report to end the episode."},
+            )
 
         self._step_number += 1
         reward = 0.0
