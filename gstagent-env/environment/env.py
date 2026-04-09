@@ -267,8 +267,9 @@ class GSTAgentEnv:
         }
 
     # Score must be strictly inside (0, 1) — 0.0 and 1.0 are rejected by validator
-    _SCORE_MIN: float = 1e-4
-    _SCORE_MAX: float = 1.0 - 1e-4
+    # CRITICAL: log_end uses :.3f — 1e-4 rounds to '0.000', (1-1e-4) rounds to '1.000'
+    _SCORE_MIN: float = 0.001   # 0.001 -> '0.001' with :.3f
+    _SCORE_MAX: float = 0.999   # 0.999 -> '0.999' with :.3f
 
     @classmethod
     def _clamp_score(cls, score: float) -> float:

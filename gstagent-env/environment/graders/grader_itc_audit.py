@@ -9,8 +9,9 @@ Deterministic: same inputs always produce same output.
 from __future__ import annotations
 
 # Score must be strictly inside (0, 1) — 0.0 and 1.0 are rejected by validator
-_SCORE_MIN = 1e-4
-_SCORE_MAX = 1.0 - 1e-4
+# CRITICAL: log_end uses :.3f — 1e-4 rounds to '0.000', (1-1e-4) rounds to '1.000'
+_SCORE_MIN = 0.001   # 0.001 -> '0.001' with :.3f
+_SCORE_MAX = 0.999   # 0.999 -> '0.999' with :.3f
 
 
 def _clamp(score: float) -> float:

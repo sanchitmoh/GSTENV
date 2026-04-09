@@ -34,6 +34,4 @@ USER appuser
 
 EXPOSE 7860
 
-# L1: disable server header to prevent tech fingerprinting
-# M6: document TLS — use reverse proxy (nginx/Caddy) or set --ssl-keyfile/--ssl-certfile
-CMD ["uvicorn", "environment.server:app", "--host", "0.0.0.0", "--port", "7860", "--server-header", "--no-server-header"]
+CMD ["uvicorn", "environment.server:app", "--host", "0.0.0.0", "--port", "7860", "--no-server-header"]

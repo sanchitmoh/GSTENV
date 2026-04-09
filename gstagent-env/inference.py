@@ -27,8 +27,10 @@ import time
 from typing import List, Optional
 
 # Score must be strictly in (0, 1) — 0.0 and 1.0 are rejected by the validator
-_SCORE_MIN: float = 1e-4   # 0.0001 — minimum valid score
-_SCORE_MAX: float = 0.9999  # maximum valid score
+# CRITICAL: log_end uses score:.3f — 1e-4 rounds to '0.000' and 0.9999 rounds to '1.000'
+# Use 0.001 (-> '0.001') and 0.999 (-> '0.999') so parsed floats stay in (0,1)
+_SCORE_MIN: float = 0.001   # min valid score: 0.001 -> '0.001' with :.3f
+_SCORE_MAX: float = 0.999   # max valid score: 0.999 -> '0.999' with :.3f
 
 
 def _clamp_score(score: float) -> float:
