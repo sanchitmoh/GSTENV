@@ -143,8 +143,9 @@ class GSTAgentEnv:
                 {"error": "Episode already finished. Call reset() first."},
             )
 
-        # Fix #11: enforce max_steps
-        if self._step_number >= self._max_steps:
+        # Fix #11: enforce max_steps — but ALWAYS allow submit_report
+        # (it is the terminal action; blocking it means scoring never runs)
+        if self._step_number >= self._max_steps and action.action_type != "submit_report":
             self._done = True
             obs = self._build_observation()
             self._cached_obs = obs
