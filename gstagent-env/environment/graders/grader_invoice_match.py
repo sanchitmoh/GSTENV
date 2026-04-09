@@ -8,6 +8,14 @@ Deterministic: same inputs always produce same output.
 
 from __future__ import annotations
 
+# Score must be strictly inside (0, 1) — 0.0 and 1.0 are rejected by validator
+_SCORE_MIN = 1e-4
+_SCORE_MAX = 1.0 - 1e-4
+
+
+def _clamp(score: float) -> float:
+    return max(_SCORE_MIN, min(_SCORE_MAX, score))
+
 
 def grade(agent_matches: dict, ground_truth: dict) -> float:
     """
@@ -18,11 +26,11 @@ def grade(agent_matches: dict, ground_truth: dict) -> float:
         ground_truth: {invoice_id: "present" | "missing"} actual answers
 
     Returns:
-        F1 score between 0.0 and 1.0
+        Score strictly in (0, 1) — never exactly 0.0 or 1.0
     """
     # Fix #14: guard against empty input
     if not agent_matches or not ground_truth:
-        return 0.0
+        return _SCORE_MIN
 
     # For F1 we treat "missing" as the positive class (what we want to detect)
     # True positives: agent correctly identified as missing
@@ -77,4 +85,4 @@ def grade(agent_matches: dict, ground_truth: dict) -> float:
     # Blend: 60% F1 (mismatch detection) + 40% accuracy (overall)
     score = 0.6 * f1 + 0.4 * accuracy
 
-    return max(0.0, min(1.0, round(score, 4)))
+    return _clamp(round(score, 4))

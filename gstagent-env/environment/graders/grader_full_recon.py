@@ -12,6 +12,14 @@ Deterministic: same inputs always produce same output.
 
 from __future__ import annotations
 
+# Score must be strictly inside (0, 1) — 0.0 and 1.0 are rejected by validator
+_SCORE_MIN = 1e-4
+_SCORE_MAX = 1.0 - 1e-4
+
+
+def _clamp(score: float) -> float:
+    return max(_SCORE_MIN, min(_SCORE_MAX, score))
+
 
 def grade(
     agent_report: dict,
@@ -37,12 +45,12 @@ def grade(
         max_steps: maximum allowed steps
 
     Returns:
-        dict with total score and component breakdown
+        dict with total score (strictly in (0,1)) and component breakdown
     """
-    # Fix #14: guard against empty input
+    # Fix #14: guard against empty input — still return min score, not 0.0
     if not agent_report or not ground_truth:
         return {
-            "total": 0.0,
+            "total": _SCORE_MIN,
             "itc_accuracy": 0.0,
             "recall_score": 0.0,
             "action_correctness": 0.0,
@@ -111,7 +119,7 @@ def grade(
     efficiency_bonus = 0.1 * (1.0 - steps_used / max(max_steps, 1))
     efficiency_bonus = max(0.0, efficiency_bonus)
 
-    # === Final Score ===
+    # === Final Score — clamped to strictly open (0, 1) ===
     raw_score = (
         0.4 * itc_accuracy
         + 0.3 * recall_score
@@ -119,7 +127,7 @@ def grade(
         - hallucination_penalty
         + efficiency_bonus
     )
-    total = max(0.0, min(1.0, round(raw_score, 4)))
+    total = _clamp(round(raw_score, 4))
 
     return {
         "total": total,

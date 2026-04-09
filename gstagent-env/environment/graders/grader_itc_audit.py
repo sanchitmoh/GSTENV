@@ -8,6 +8,14 @@ Deterministic: same inputs always produce same output.
 
 from __future__ import annotations
 
+# Score must be strictly inside (0, 1) — 0.0 and 1.0 are rejected by validator
+_SCORE_MIN = 1e-4
+_SCORE_MAX = 1.0 - 1e-4
+
+
+def _clamp(score: float) -> float:
+    return max(_SCORE_MIN, min(_SCORE_MAX, score))
+
 
 def grade(
     agent_decisions: dict,
@@ -25,11 +33,11 @@ def grade(
         truth_amounts: {invoice_id: float} correct ITC amounts (optional)
 
     Returns:
-        Score between 0.0 and 1.0
+        Score strictly in (0, 1) — never exactly 0.0 or 1.0
     """
     # Fix #14: guard against empty input
     if not agent_decisions or not ground_truth:
-        return 0.0
+        return _SCORE_MIN
 
     # Decision accuracy: correct eligibility classifications
     all_ids = set(ground_truth.keys())
@@ -37,7 +45,7 @@ def grade(
     total = len(all_ids)
 
     if total == 0:
-        return 0.0
+        return _SCORE_MIN
 
     for inv_id in all_ids:
         agent_val = agent_decisions.get(inv_id, "unknown")
@@ -68,4 +76,4 @@ def grade(
     # Weighted: 70% decision accuracy + 30% amount accuracy
     score = 0.7 * decision_accuracy + 0.3 * amount_accuracy
 
-    return max(0.0, min(1.0, round(score, 4)))
+    return _clamp(round(score, 4))

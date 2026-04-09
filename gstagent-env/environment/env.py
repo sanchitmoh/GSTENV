@@ -266,18 +266,32 @@ class GSTAgentEnv:
             "detail_count": len(details),
         }
 
+    # Score must be strictly inside (0, 1) — 0.0 and 1.0 are rejected by validator
+    _SCORE_MIN: float = 1e-4
+    _SCORE_MAX: float = 1.0 - 1e-4
+
+    @classmethod
+    def _clamp_score(cls, score: float) -> float:
+        """Guarantee score is strictly in (0, 1) as required by the validator."""
+        return max(cls._SCORE_MIN, min(cls._SCORE_MAX, score))
+
     def _handle_submit(self, action: GSTAction) -> tuple[float, dict]:
         """Handle submit_report — run grader and end episode."""
         payload = action.payload or {}
 
         if self.task_id == "invoice_match":
-            return self._grade_invoice_match(payload)
+            raw_score, info = self._grade_invoice_match(payload)
         elif self.task_id == "itc_audit":
-            return self._grade_itc_audit(payload)
+            raw_score, info = self._grade_itc_audit(payload)
         elif self.task_id == "full_recon":
-            return self._grade_full_recon(payload)
+            raw_score, info = self._grade_full_recon(payload)
         else:
-            return 0.0, {"error": f"No grader for task: {self.task_id}"}
+            return self._SCORE_MIN, {"error": f"No grader for task: {self.task_id}"}
+
+        # Final safety clamp — score must be strictly in (0, 1)
+        safe_score = self._clamp_score(raw_score)
+        info["score"] = safe_score
+        return safe_score, info
 
     # ── Grading ──────────────────────────────────────────────────────
 
