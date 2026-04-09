@@ -225,6 +225,19 @@ async def add_request_id(request: Request, call_next):
 # ── Endpoints ────────────────────────────────────────────────────────
 
 
+@app.get("/")
+async def root():
+    """Root health check — HuggingFace Space readiness probe (GET /)."""
+    return {
+        "status": "healthy",
+        "name": "gstagent-env",
+        "description": "OpenEnv-compatible RL environment for Indian GST reconciliation",
+        "version": "1.0.0",
+        "sessions_active": len(sessions),
+        "endpoints": ["/reset", "/step", "/health", "/metadata", "/schema", "/leaderboard"],
+    }
+
+
 @app.get("/health")
 async def health():
     """Liveness probe — HuggingFace pings this to verify the Space is alive."""
