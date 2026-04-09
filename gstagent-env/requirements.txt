@@ -1,4 +1,5 @@
 openenv
+requests>=2.31.0
 pydantic==2.12.5
 fastapi==0.135.3
 uvicorn[standard]==0.42.0

@@ -266,7 +266,11 @@ def run_task(task_id: str) -> tuple[float, int, list[float]]:
     steps_taken = 0
 
     # Reset environment
-    obs_data = api_reset(task_id)
+    try:
+        obs_data = api_reset(task_id)
+    except Exception as e:
+        print(f"  ❌ Reset failed: {e}")
+        return 0.0, 0, []
     session_id = obs_data.get("session_id", "")
 
     invoices = obs_data.get("purchase_register", [])
@@ -310,7 +314,11 @@ def run_task(task_id: str) -> tuple[float, int, list[float]]:
         if choice.message.tool_calls:
             for tool_call in choice.message.tool_calls:
                 fn_name = tool_call.function.name
-                fn_args = json.loads(tool_call.function.arguments)
+                try:
+                    fn_args = json.loads(tool_call.function.arguments)
+                except (json.JSONDecodeError, ValueError) as e:
+                    print(f"  ⚠️ Failed to parse tool args: {e}")
+                    continue
 
                 print(f"  Step {step_num + 1}: {fn_name}({json.dumps(fn_args)[:80]})")
 
@@ -322,7 +330,11 @@ def run_task(task_id: str) -> tuple[float, int, list[float]]:
                     "payload": fn_args if fn_name == "submit_report" else None,
                 }
 
-                result = api_step(session_id, action)
+                try:
+                    result = api_step(session_id, action)
+                except Exception as e:
+                    print(f"  ❌ Step failed: {e}")
+                    break
 
                 reward = result.get("reward", 0)
                 done = result.get("done", False)
@@ -366,7 +378,11 @@ def run_task(task_id: str) -> tuple[float, int, list[float]]:
         "action_type": "submit_report",
         "payload": {"total_itc": 0.0, "discrepancies": []},
     }
-    result = api_step(session_id, action)
+    try:
+        result = api_step(session_id, action)
+    except Exception as e:
+        print(f"  ❌ Final submit failed: {e}")
+        return 0.0, steps_taken, rewards
     reward = result.get("reward", 0)
     score = result.get("info", {}).get("score", reward)
     score = min(max(score, 0.0), 1.0)  # clamp to [0, 1]
