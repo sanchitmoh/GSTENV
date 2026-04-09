@@ -77,7 +77,11 @@ except ImportError as _e:
     sys.exit(1)
 
 # HF_TOKEN / API_KEY fallback (mandatory per submission spec)
-API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY") or OPENAI_API_KEY
+# Judge injects API_BASE_URL + API_KEY via LiteLLM proxy — MUST use both.
+# Priority: judge's API_KEY > HF_TOKEN > local OPENAI_API_KEY
+API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN") or OPENAI_API_KEY
+# LiteLLM proxy base URL — judge sets this; fall back to our own env URL
+LLM_BASE_URL: Optional[str] = os.getenv("API_BASE_URL") or os.getenv("OPENAI_BASE_URL")
 BENCHMARK = "gstagent-env"
 
 # Fix #25: Timeout guard
@@ -246,8 +250,18 @@ def api_step(session_id: str, action: dict) -> dict:
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def call_llm(messages: list[dict]) -> dict:
-    """Call LLM with tools and retry (Fix #24)."""
-    client = OpenAI(api_key=API_KEY)
+    """Call LLM via judge-injected LiteLLM proxy with tools and retry.
+
+    The competition validator injects two environment variables:
+      API_BASE_URL  — LiteLLM proxy route (e.g. https://api.openai.com/v1)
+      API_KEY       — proxy API key
+    Both MUST be passed to the OpenAI client; omitting base_url makes calls
+    invisible to the proxy and triggers 'No API calls were made' failure.
+    """
+    client_kwargs = {"api_key": API_KEY}
+    if LLM_BASE_URL:
+        client_kwargs["base_url"] = LLM_BASE_URL
+    client = OpenAI(**client_kwargs)
     response = client.chat.completions.create(
         model=MODEL_NAME,
         messages=messages,
