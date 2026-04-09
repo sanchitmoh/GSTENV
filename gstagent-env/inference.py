@@ -65,7 +65,6 @@ load_dotenv()
 
 try:
     from environment.config import (
-        API_BASE_URL,
         INFERENCE_TIMEOUT_SECONDS,
         MODEL_NAME,
         OPENAI_API_KEY,
@@ -77,10 +76,24 @@ except ImportError as _e:
     sys.exit(1)
 
 # HF_TOKEN / API_KEY fallback (mandatory per submission spec)
-# Judge injects API_BASE_URL + API_KEY via LiteLLM proxy — MUST use both.
-# Priority: judge's API_KEY > HF_TOKEN > local OPENAI_API_KEY
+# ── URL resolution ──────────────────────────────────────────────────
+# IMPORTANT — Two completely separate URLs, same-named vars would collide:
+#
+#   GST_ENV_URL   = our FastAPI environment server (reset/step/state)
+#   API_BASE_URL  = judge's LiteLLM proxy (LLM calls only)
+#
+# The judge injects API_BASE_URL for the LLM proxy. We must NOT use that
+# variable for our env server or api_reset/api_step will hit the LLM proxy.
+
+# Env server URL: judge may set GST_ENV_URL; default = our HF Space URL
+GST_ENV_URL: str = (
+    os.getenv("GST_ENV_URL")
+    or os.getenv("ENV_URL")
+    or "https://Ssk2004-gstagent-env.hf.space"
+)
+
+# LLM proxy URL: judge injects API_BASE_URL; DO NOT use for env server
 API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN") or OPENAI_API_KEY
-# LiteLLM proxy base URL — judge sets this; fall back to our own env URL
 LLM_BASE_URL: Optional[str] = os.getenv("API_BASE_URL") or os.getenv("OPENAI_BASE_URL")
 BENCHMARK = "gstagent-env"
 
@@ -226,9 +239,9 @@ TOOLS = [
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def api_reset(task_id: str) -> dict:
-    """POST /reset with retry (Fix #24)."""
+    """POST /reset with retry. Uses GST_ENV_URL (NOT the LLM proxy URL)."""
     resp = requests.post(
-        f"{API_BASE_URL}/reset",
+        f"{GST_ENV_URL}/reset",
         json={"task_id": task_id},
         timeout=RESET_TIMEOUT_SECONDS,
     )
@@ -238,9 +251,9 @@ def api_reset(task_id: str) -> dict:
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def api_step(session_id: str, action: dict) -> dict:
-    """POST /step with retry (Fix #24)."""
+    """POST /step with retry. Uses GST_ENV_URL (NOT the LLM proxy URL)."""
     resp = requests.post(
-        f"{API_BASE_URL}/step",
+        f"{GST_ENV_URL}/step",
         json={"session_id": session_id, "action": action},
         timeout=STEP_TIMEOUT_SECONDS,
     )
