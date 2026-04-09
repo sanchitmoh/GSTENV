@@ -1,12 +1,12 @@
 ---
 title: GST Agent Environment
-emoji: 🧾
+emoji: 📊
 colorFrom: blue
 colorTo: green
 sdk: docker
+app_port: 7860
 pinned: false
 license: apache-2.0
-app_port: 7860
 ---
 
 # GST Agent Environment
