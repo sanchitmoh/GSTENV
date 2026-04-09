@@ -23,7 +23,7 @@ import sys
 import time
 
 from environment.agents.orchestrator import Orchestrator
-from environment.config import API_BASE_URL, MODEL_NAME
+from environment.config import API_BASE_URL, MODEL_NAME, OPENAI_API_KEY
 from environment.curriculum import CurriculumConfig, CurriculumManager
 from environment.knowledge.rag_engine import get_rag_engine
 from environment.knowledge.eval_rag import evaluate_retrieval
@@ -39,6 +39,10 @@ def main():
     print("=" * 70)
     print(f"  API:   {api_base}")
     print(f"  Model: {model}")
+
+    if not OPENAI_API_KEY:
+        print("\n  ⚠️  Warning: OPENAI_API_KEY not set. Agent LLM calls will fail.")
+        print("     Set it in .env or as an environment variable.")
 
     # ── Initialize RAG v2 ────────────────────────────────────────
     print("\n📚 Initializing RAG v2 Knowledge Base...")

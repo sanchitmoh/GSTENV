@@ -1,4 +1,0 @@
-# file: C:\HACKTHAON\gstagent-env\environment\tasks\task3_full_recon.py
-# hypothesis_version: 6.151.10
-
-['data_file', 'description', 'difficulty', 'full_recon', 'hard', 'invoices_hard.json', 'max_steps', 'task_id']

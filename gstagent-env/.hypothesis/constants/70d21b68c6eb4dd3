@@ -1,4 +1,0 @@
-# file: C:\HACKTHAON\gstagent-env\environment\env.py
-# hypothesis_version: 6.151.10
-
-[0.0, 0.05, 'action', 'action_type', 'all_invoice_ids', 'amount_variance', 'breakdown', 'compute_itc', 'data', 'data_file', 'decisions', 'detail_count', 'discrepancies', 'done', 'eligibility', 'eligible', 'error', 'flag', 'flag_mismatch', 'full_recon', 'grader', 'gstr2b', 'gstr2b_found', 'ineligible', 'info_keys', 'invoice_id', 'invoice_match', 'itc_amount', 'itc_audit', 'match', 'match_invoice', 'match_status', 'matches', 'max_steps', 'missing', 'partial', 'present', 'purchase_register', 'reason', 'reward', 'score', 'status', 'step', 'submit_report', 'taxable_amount', 'total', 'total_itc', 'unknown', 'unspecified']

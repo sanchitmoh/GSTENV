@@ -1,4 +1,0 @@
-# file: C:\HACKTHAON\gstagent-env\environment\agents\reporter.py
-# hypothesis_version: 6.151.10
-
-[0.0, 'Auditor', 'Matcher', 'Reporter', 'action', 'action_type', 'compute_itc', 'decisions', 'discrepancies', 'ineligible', 'invoice_id', 'itc_amount', 'matches', 'missing', 'partial', 'payload', 'present', 'reason', 'status', 'submit_report', 'total_eligible_itc', 'total_itc', 'total_partial_itc', 'unknown']

@@ -20,6 +20,7 @@ from environment.agents.base_agent import AgentMessage
 from environment.agents.matcher import MatcherAgent
 from environment.agents.reporter import ReporterAgent
 from environment.agents.validator import ValidatorAgent
+from environment.knowledge.rag_engine import get_rag_engine
 from environment.config import (
     API_BASE_URL,
     FAST_MODEL_NAME,
@@ -100,6 +101,26 @@ class Orchestrator:
         print(f"  Session: {self.session_id[:8]}...")
         print(f"  Invoices: {len(obs_data.get('purchase_register', []))}")
         print(f"  GSTR-2B: {len(obs_data.get('gstr2b_data', []))}")
+
+        # ── v4: Inject RAG context into agents ──────────────────────
+        try:
+            rag = get_rag_engine()
+            if task_id == "itc_audit":
+                rag_context = rag.get_itc_rules_context()
+            elif task_id == "full_recon":
+                rag_context = rag.get_reconciliation_context()
+            else:
+                rag_context = rag.get_context_for_prompt(
+                    f"invoice matching reconciliation {task_id}", max_tokens=1500,
+                )
+            # Inject into all agents
+            self.matcher.inject_context(rag_context)
+            self.auditor.inject_context(rag_context)
+            self.reporter.inject_context(rag_context)
+            self.validator.inject_context(rag_context)
+            print(f"  📚 RAG context injected: {len(rag_context)} chars")
+        except Exception as e:
+            print(f"  ⚠️ RAG context injection skipped: {e}")
 
         # ── Stage 1: Matcher ─────────────────────────────────────
         print(f"\n  📋 Stage 1: Matcher Agent")

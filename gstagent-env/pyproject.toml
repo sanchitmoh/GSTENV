@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gstagent-env"
+version = "1.0.0"
+description = "GST reconciliation environment for Indian MSMEs — invoice matching, ITC audit, and full reconciliation with multi-signal reward"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "sanchitmoh" }
+]
+dependencies = [
+    "openenv",
+    "requests>=2.31",
+    "pydantic>=2.10",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "openai>=1.30",
+    "Faker>=30.0",
+    "structlog>=24.0",
+    "tenacity>=9.0",
+    "python-dotenv>=1.0",
+    "slowapi>=0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0",
+    "pytest-asyncio>=1.0",
+    "hypothesis>=6.0",
+    "bandit>=1.7",
+    "pip-audit>=2.7",
+]
+
+[project.scripts]
+server = "server.app:main"
+
+[tool.setuptools.packages.find]
+include = ["environment*", "server*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

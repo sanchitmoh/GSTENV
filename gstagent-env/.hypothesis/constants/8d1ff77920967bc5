@@ -1,4 +1,0 @@
-# file: C:\HACKTHAON\gstagent-env\environment\server.py
-# hypothesis_version: 6.151.10
-
-[400, 404, 504, 1000, '*', '/health', '/leaderboard', '/replay/{session_id}', '/reset', '/state/{session_id}', '/step', '1.0.0', '100/minute', 'X-Request-ID', 'created_at', 'done', 'entries', 'env', 'episode_reset', 'http', 'info', 'iso', 'leaderboard.json', 'observation', 'ok', 'request', 'reward', 'score', 'server_started', 'server_stopped', 'session_expired', 'session_id', 'sessions_active', 'status', 'step', 'steps', 'task_id', 'timestamp', 'total_steps', 'w']

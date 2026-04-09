@@ -12,16 +12,20 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+*.egg
 
 # Environment secrets
 .env
 .env.local
 .env.production
+.env.*.local
 
 # IDE
 .vscode/
 .idea/
 *.swp
+*.swo
+*~
 
 # Testing
 .pytest_cache/
@@ -29,15 +33,21 @@ build/
 .ruff_cache/
 htmlcov/
 .coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
 
 # OS
 .DS_Store
 Thumbs.db
+Desktop.ini
 
-# Security — database files (L4)
+# Security — database files
 *.db
 *.sqlite
 *.sqlite3
+leaderboard.db
 
 # Security — key files
 *.pem
@@ -48,3 +58,20 @@ secrets/
 
 # Security scan reports
 bandit-report.json
+bandit_output.txt
+sec_output.txt
+
+# Test & build output files
+test_results.txt
+test_security_output.txt
+full_output.txt
+
+# Leaderboard data (runtime-generated)
+leaderboard.json
+
+# UV / pip
+.uv/
+
+# Agents / Gemini
+.gemini/
+
