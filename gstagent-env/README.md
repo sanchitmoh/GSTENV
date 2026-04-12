@@ -4,8 +4,6 @@ emoji: 🧾
 colorFrom: blue
 colorTo: green
 sdk: docker
-sdk_version: "3.11"
-app_file: environment/server.py
 app_port: 7860
 pinned: false
 license: apache-2.0
