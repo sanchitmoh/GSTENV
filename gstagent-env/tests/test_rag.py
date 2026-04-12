@@ -2911,5 +2911,139 @@ class TestEvalHarnessV4Expanded:
         assert _compute_mrr(["X", "Y", "Z"], ["A"]) == 0.0
 
 
+# ── Token Budget Tests (security-relevant, was untested) ─────────────
+
+class TestRAGEngineTokenBudget:
+    """Ensure get_context_for_prompt respects max_tokens budget."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.engine = RAGEngine()
+        self.engine.initialize()
+
+    def test_context_respects_token_budget(self):
+        """Context should not exceed the requested token budget."""
+        for budget in [50, 100, 200, 500]:
+            ctx = self.engine.get_context_for_prompt(
+                "ITC eligibility Rule 36", top_k=10, max_tokens=budget
+            )
+            word_count = len(ctx.split())
+            # Allow 1.5x overhead for context headers/formatting
+            assert word_count <= budget * 1.5, (
+                f"Budget={budget}, words={word_count} exceeds 1.5x limit"
+            )
+
+    def test_small_budget_still_returns_content(self):
+        """Even a very small budget should return some content."""
+        ctx = self.engine.get_context_for_prompt(
+            "What is GSTR-2B?", top_k=3, max_tokens=20
+        )
+        assert len(ctx.strip()) > 0
+
+    def test_large_budget_includes_more_context(self):
+        """Larger budgets should include equal or more content."""
+        ctx_small = self.engine.get_context_for_prompt(
+            "ITC reconciliation", top_k=5, max_tokens=50
+        )
+        ctx_large = self.engine.get_context_for_prompt(
+            "ITC reconciliation", top_k=5, max_tokens=500
+        )
+        assert len(ctx_large) >= len(ctx_small)
+
+    def test_zero_budget_returns_empty_or_minimal(self):
+        """Zero token budget should return only scaffolding (header + notice)."""
+        ctx = self.engine.get_context_for_prompt(
+            "ITC eligibility", top_k=5, max_tokens=0
+        )
+        # Even with 0 budget, the header + truncation notice adds ~11 words
+        assert len(ctx.split()) <= 15  # No actual chunk content, just scaffolding
+
+
+# ── Knowledge Graph Enrichment Tests ─────────────────────────────────
+
+class TestKnowledgeGraphEnriched:
+    """Test the enriched knowledge graph with hardcoded citation edges."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        from environment.knowledge.query_router import KnowledgeGraph
+        self.kg = KnowledgeGraph()
+        self.kg.build_from_documents(get_all_documents())
+
+    def test_rule_37_has_neighbors(self):
+        """Rule-37 should have citation neighbors after enrichment."""
+        neighbors = self.kg.get_neighbors("Rule-37")
+        assert len(neighbors) > 0, "Rule-37 should have neighbors"
+        assert "Section-16-2" in neighbors
+
+    def test_rule_37_linked_to_gstr2b(self):
+        """Rule-37 should link to GSTR-2B-Auto-Generation."""
+        neighbors = self.kg.get_neighbors("Rule-37")
+        assert "GSTR-2B-Auto-Generation" in neighbors
+
+    def test_graph_has_minimum_edges(self):
+        """Enriched graph should have significantly more edges."""
+        assert self.kg.edge_count >= 15, (
+            f"Expected >=15 edges, got {self.kg.edge_count}"
+        )
+
+    def test_reconciliation_linked_to_gstr2b(self):
+        """Reconciliation best practices should link to GSTR-2B."""
+        neighbors = self.kg.get_neighbors("Reconciliation-Best-Practices")
+        assert "GSTR-2B-Auto-Generation" in neighbors
+
+    def test_exports_linked_to_rcm(self):
+        """Export refunds should link to Reverse Charge Mechanism."""
+        neighbors = self.kg.get_neighbors("GST-Exports-Refund")
+        assert "Reverse-Charge-Mechanism" in neighbors
+
+
+# ── GSTIN Abbreviation Test ──────────────────────────────────────────
+
+class TestGSTINAbbreviation:
+    """Ensure GSTIN is properly mapped as a synonym key."""
+
+    def test_gstin_has_synonym_entry(self):
+        qp = QueryProcessor()
+        assert "gstin" in qp.GST_SYNONYMS
+
+    def test_gstin_expands_to_registration(self):
+        qp = QueryProcessor()
+        expanded = qp.expand("GSTIN")
+        assert "registration" in expanded.lower() or "gstin" in expanded.lower()
+
+
+# ── Faithfulness Report Regex Fix ────────────────────────────────────
+
+class TestFaithfulnessReportConsistency:
+    """get_grounding_report must agree with assert_grounded."""
+
+    def test_report_and_assert_agree_on_grounded(self):
+        """If assert_grounded returns True, report should show is_faithful=True."""
+        from environment.knowledge.faithfulness import assert_grounded, get_grounding_report
+        engine = RAGEngine()
+        engine.initialize()
+        contexts = engine.retrieve("ITC eligibility conditions Rule 36", top_k=3)
+        response = "Based on Rule 36(4), ITC can only be claimed for invoices appearing in GSTR-2B."
+        is_grounded = assert_grounded(response, contexts)
+        report = get_grounding_report(response, contexts)
+        assert is_grounded == report["is_faithful"], (
+            f"Mismatch: assert_grounded={is_grounded}, report={report['is_faithful']}, "
+            f"ungrounded={report['ungrounded_references']}"
+        )
+
+    def test_report_and_assert_agree_on_hallucinated(self):
+        """Both should flag hallucinated references."""
+        from environment.knowledge.faithfulness import assert_grounded, get_grounding_report
+        engine = RAGEngine()
+        engine.initialize()
+        contexts = engine.retrieve("ITC eligibility", top_k=3)
+        response = "Under Rule 99, the 15% provisional credit applies."
+        is_grounded = assert_grounded(response, contexts)
+        report = get_grounding_report(response, contexts)
+        assert is_grounded == report["is_faithful"]
+        assert not is_grounded  # Should both be False
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -455,6 +455,38 @@ class KnowledgeGraph:
                         self.add_edge(doc_id, other_id)
                         break
 
+        # ── Hardcoded citation edges for well-known GST relationships ──
+        # These ensure the graph is rich even when auto-detection misses
+        # references due to ID vs. human-readable name mismatches.
+        KNOWN_CITATIONS = [
+            ("Rule-37", "Section-16-2"),
+            ("Rule-37", "GSTR-2B-Auto-Generation"),
+            ("Rule-36-4", "Section-16-2"),
+            ("Rule-36-4", "GSTR-2B-Auto-Generation"),
+            ("Rule-86B-Cash-Restriction", "Electronic-Ledgers"),
+            ("Rule-86B-Cash-Restriction", "Blocked-Credits-Section-17-5"),
+            ("ITC-Proportional-Reversal-Rule-42-43", "Section-16-2"),
+            ("ITC-Proportional-Reversal-Rule-42-43", "Blocked-Credits-Section-17-5"),
+            ("CBIC-Circular-170", "Section-16-2"),
+            ("CBIC-Circular-170", "GSTR-2B-Auto-Generation"),
+            ("CBIC-Circular-183", "Section-16-2"),
+            ("GST-Interest-on-ITC", "Section-16-2"),
+            ("GST-Interest-on-ITC", "Section-16-4-Time-Limit"),
+            ("GST-Exports-Refund", "Reverse-Charge-Mechanism"),
+            ("GST-Exports-Refund", "E-Invoice-Mandate"),
+            ("E-Invoice-Mandate", "E-Invoice-Cancellation"),
+            ("GSTR-1-Filing", "GSTR-2B-Auto-Generation"),
+            ("GSTR-3B-Filing", "GSTR-2B-Auto-Generation"),
+            ("Reconciliation-Best-Practices", "GSTR-2B-Auto-Generation"),
+            ("Reconciliation-Best-Practices", "Mismatch-Tolerance"),
+            ("Input-Service-Distributor", "Section-16-2"),
+            ("RCM-Specified-Services", "Reverse-Charge-Mechanism"),
+        ]
+        doc_ids = {doc.get("id", "") for doc in documents}
+        for from_id, to_id in KNOWN_CITATIONS:
+            if from_id in doc_ids and to_id in doc_ids:
+                self.add_edge(from_id, to_id)
+
         self._built = True
 
     @property

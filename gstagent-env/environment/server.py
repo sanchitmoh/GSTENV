@@ -21,6 +21,7 @@ import asyncio
 import json
 import time
 import uuid
+from collections import deque as _deque
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -75,29 +76,49 @@ logger = structlog.get_logger()
 # ── Session Manager (Fix #10) ────────────────────────────────────────
 sessions: dict[str, dict] = {}  # session_id -> {"env": GSTAgentEnv, "created_at": float}
 
-# ── Leaderboard ──────────────────────────────────────────────────────
+# ── Leaderboard — async-safe in-memory deque (Upgrade #10) ───────────
 LEADERBOARD_FILE = Path(__file__).parent.parent / "leaderboard.json"
+_leaderboard_lock: asyncio.Lock = asyncio.Lock()
+_leaderboard: _deque[dict] = _deque(maxlen=LEADERBOARD_MAX_ENTRIES)
 
 
-def _load_leaderboard() -> list[dict]:
+def _load_leaderboard_from_disk() -> None:
+    """Sync cold-start load. Called once in lifespan before event loop tasks start."""
     if LEADERBOARD_FILE.exists():
         try:
             with open(LEADERBOARD_FILE) as f:
-                return json.load(f)
-        except (json.JSONDecodeError, OSError):
-            return []
-    return []
+                entries: list[dict] = json.load(f)
+            entries.sort(key=lambda x: x.get("score", 0), reverse=True)
+            for entry in entries[:LEADERBOARD_MAX_ENTRIES]:
+                _leaderboard.append(entry)
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning("leaderboard_load_failed", error=str(e))
 
 
-def _save_leaderboard(entries: list[dict]) -> None:
-    # Keep top N, sorted by score descending
-    entries.sort(key=lambda x: x.get("score", 0), reverse=True)
-    entries = entries[:LEADERBOARD_MAX_ENTRIES]
+async def _append_leaderboard(entry: dict) -> None:
+    """Thread-safe append + fire-and-forget background disk flush."""
+    async with _leaderboard_lock:
+        _leaderboard.append(entry)
+        snapshot = list(_leaderboard)
+
+    async def _persist() -> None:
+        try:
+            await asyncio.to_thread(_write_leaderboard_sync, snapshot)
+        except Exception as e:
+            logger.error("leaderboard_persist_failed", error=str(e))
+
+    asyncio.create_task(_persist())
+
+
+def _write_leaderboard_sync(entries: list[dict]) -> None:
+    """Sync write called in thread pool (no event loop blocking)."""
+    sorted_entries = sorted(entries, key=lambda x: x.get("score", 0), reverse=True)
     try:
         with open(LEADERBOARD_FILE, "w") as f:
-            json.dump(entries, f, indent=2)
+            json.dump(sorted_entries[:LEADERBOARD_MAX_ENTRIES], f, indent=2)
     except OSError as e:
         logger.error("leaderboard_write_failed", error=str(e))
+
 
 
 # ── Rate Limiting ────────────────────────────────────────────────────
@@ -125,6 +146,7 @@ async def cleanup_expired_sessions() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle."""
+    _load_leaderboard_from_disk()  # populate in-memory deque at boot
     task = asyncio.create_task(cleanup_expired_sessions())
     logger.info("server_started", ttl_seconds=SESSION_TTL_SECONDS)
     yield
@@ -198,6 +220,13 @@ async def security_headers(request: Request, call_next):
     response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-DNS-Prefetch-Control"] = "off"
+    # Upgrade #7: CSP — restrict scripts, objects, and frames (XSS + clickjacking)
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'none'; "
+        "object-src 'none'; "
+        "frame-ancestors 'none';"
+    )
     return response
 
 
@@ -312,17 +341,15 @@ async def step(body: StepRequest, request: Request):
 
     obs, reward, done, info = result
 
-    # Save to leaderboard on completion
+    # Save to leaderboard on completion (async-safe — Upgrade #10)
     if done and reward > 0:
-        entries = _load_leaderboard()
-        entries.append({
+        await _append_leaderboard({
             "session_id": body.session_id,
             "task_id": env.task_id,
             "score": reward,
             "steps": env._step_number,
             "timestamp": datetime.now(UTC).isoformat(),
         })
-        _save_leaderboard(entries)
 
     logger.info(
         "step",
@@ -358,9 +385,10 @@ async def get_state(session_id: str):
 
 @app.get("/leaderboard")
 async def leaderboard():
-    """Return top 10 scores (Fix #36)."""
-    entries = _load_leaderboard()
-    return {"entries": entries[:10]}
+    """Return top 10 scores — served from memory (Upgrade #10)."""
+    async with _leaderboard_lock:
+        top10 = sorted(_leaderboard, key=lambda x: x.get("score", 0), reverse=True)[:10]
+    return {"entries": top10}
 
 
 @app.get("/replay/{session_id}")

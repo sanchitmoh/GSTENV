@@ -33,6 +33,19 @@ def grade(agent_matches: dict, ground_truth: dict) -> float:
     if not agent_matches or not ground_truth:
         return _SCORE_MIN
 
+    # Upgrade #9: deduplicate agent matches — last call per invoice_id wins.
+    # Prevents duplicate match_invoice calls from inflating false positives.
+    if isinstance(agent_matches, list):
+        # Accept list-of-dicts format too: [{invoice_id: .., status: ..}, ...]
+        deduped: dict[str, str] = {}
+        for entry in agent_matches:
+            if isinstance(entry, dict):
+                inv_id = entry.get("invoice_id", "")
+                status = entry.get("status", "unknown")
+                if inv_id:
+                    deduped[inv_id] = status
+        agent_matches = deduped
+
     # For F1 we treat "missing" as the positive class (what we want to detect)
     # True positives: agent correctly identified as missing
     # False positives: agent said missing but actually present

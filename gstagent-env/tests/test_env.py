@@ -71,8 +71,15 @@ class TestMaxSteps:
         action = GSTAction(action_type="match_invoice", invoice_id="INV-0001")
         for _ in range(8):
             obs, reward, done, info = env.step(action)
-        # 9th step should be blocked
+        # 9th exploration step should be blocked but episode stays alive
+        # (v2 design: agent can still call submit_report)
         obs, reward, done, info = env.step(action)
+        assert done is False
+        assert "error" in info
+        assert "budget" in info["error"].lower()
+        # submit_report still works after budget exhaustion
+        submit = GSTAction(action_type="submit_report", payload={})
+        obs, reward, done, info = env.step(submit)
         assert done is True
 
     def test_after_done_returns_done(self):

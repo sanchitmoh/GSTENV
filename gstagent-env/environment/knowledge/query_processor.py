@@ -70,6 +70,7 @@ class QueryProcessor:
         "irp": ["invoice registration portal", "e-invoice portal"],
 
         # ── NEW: Registration ───────────────────────────────────────
+        "gstin": ["registration", "gstin number", "gst identification number", "registered"],
         "registration": ["gstin", "registered", "enrolment", "reg"],
         "threshold": ["limit", "turnover limit", "eligibility"],
         "cancel": ["cancellation", "revoke", "revocation", "deregister"],

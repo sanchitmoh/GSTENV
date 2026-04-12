@@ -74,11 +74,12 @@ GST_KNOWLEDGE_BASE: list[dict] = [
         "id": "Rule-37",
         "title": "Rule 37 — Reversal of ITC for non-payment within 180 days",
         "content": (
-            "If a buyer fails to pay the supplier within 180 days from the "
-            "invoice date, the ITC claimed must be reversed and added to "
-            "output tax liability along with interest under Section 50. "
-            "The ITC can be reclaimed when payment is eventually made. "
-            "This rule applies to all types of supplies — goods and services."
+            "Rule 37 of CGST Rules requires reversal of ITC if a buyer fails "
+            "to pay the supplier within 180 days from the invoice date. The ITC "
+            "claimed must be reversed and added to output tax liability along "
+            "with interest under Section 50. The ITC can be reclaimed when "
+            "payment is eventually made. Rule 37 applies to all types of "
+            "supplies — goods and services."
         ),
         "source": "CGST Rules, Rule 37",
         "category": "rules",

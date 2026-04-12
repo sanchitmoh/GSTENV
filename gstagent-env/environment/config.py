@@ -46,7 +46,12 @@ RATE_LIMIT_WINDOW: int = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
 
 # ── Security ─────────────────────────────────────────────────────────
 GST_API_KEY: str = os.getenv("GST_API_KEY", "")
-ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "*")
+# Upgrade #6: explicit default instead of wildcard '*'
+# Set ALLOWED_ORIGINS env var to a comma-separated list for custom deployments.
+ALLOWED_ORIGINS: str = os.getenv(
+    "ALLOWED_ORIGINS",
+    "https://Ssk2004-gstagent-env.hf.space,http://localhost:7860",
+)
 MAX_REQUEST_BODY_BYTES: int = int(os.getenv("MAX_REQUEST_BODY_BYTES", "1048576"))  # 1MB
 
 # Auto-generate ephemeral API key if none configured (security fix H1)
@@ -77,11 +82,14 @@ def validate_config() -> list[str]:
     """Validate configuration and return list of warnings."""
     warnings: list[str] = []
     if ALLOWED_ORIGINS == "*":
-        warnings.append("CORS: ALLOWED_ORIGINS is wildcard '*'. Set explicit origins in production.")
+        warnings.append(
+            "CORS: ALLOWED_ORIGINS is wildcard '*'. "
+            "Set ALLOWED_ORIGINS env var to explicit comma-separated origins in production."
+        )
     if not os.getenv("GST_API_KEY"):
         warnings.append("AUTH: No GST_API_KEY set. Using auto-generated ephemeral key.")
-    if not OPENAI_API_KEY:
-        warnings.append("LLM: No OPENAI_API_KEY set. LLM-based agents will fail.")
+    if not OPENAI_API_KEY and not os.getenv("API_KEY") and not os.getenv("HF_TOKEN"):
+        warnings.append("LLM: No API key found (OPENAI_API_KEY / API_KEY / HF_TOKEN). LLM-based agents will fail.")
     return warnings
 
 
